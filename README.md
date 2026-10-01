@@ -8,7 +8,28 @@ The decision path is pure Python/NumPy with no LLM, no network and no randomness
 only completed bars, and on any error it **holds**, which means it uploads nothing and the
 backend keeps the existing portfolio with no fee.
 
-<!-- RESULTS -->
+**Live configuration** (`models/params.json`):
+- inverse-volatility weights from 40 days of hourly returns, capped at 10% per stock
+- **50% gross exposure** (the rest is cash)
+- partial rebalancing with λ = 0.25, a 0.05 L1 no-trade band, and per-name trades under 0.2% dropped
+- the alpha tilt is **off**
+
+In practice the agent buys the inverse-vol portfolio and rarely trades after that.
+
+| Rolling 15-day windows (start from cash) | Agent median rank | Best simple baseline | Agent worst 15d MDD | EW buy & hold worst 15d MDD |
+|---|---:|---:|---:|---:|
+| Train 2021–24 | **6.50** / 24 | 8.50 (EW B&H) | 6.2% | 13.2% |
+| Validation 2025-01..09 | **6.50** / 24 | 8.12 (EW B&H) | 7.9% | 16.7% |
+| Holdout 2025-Q4 (evaluated once) | **6.50** / 24 | 8.00 (cash) | 2.1% | 4.8% |
+
+Full tables, charts and caveats are in [`reports/backtest_report.md`](reports/backtest_report.md).
+The alpha experiment is in [`reports/alpha_experiment.md`](reports/alpha_experiment.md).
+
+The trade-off is explicit: over all of 2025 the agent returned +8.6% (Sharpe 1.24, MDD 9.9%) against +19.0% (Sharpe 1.20,
+MDD 20.9%) for equal-weight buy & hold. The competition ranks drawdown and turnover as heavily as return,
+and on that score the low-exposure, low-turnover profile ranks better in every period. Gross 0.70–0.85 is
+statistically tied with 0.50 on median rank. 0.50 won only on worst-case windows, so raising `gross` is a reasonable
+judgment call if you expect most rival teams to run high-drawdown portfolios.
 
 ## Competition facts this design relies on
 

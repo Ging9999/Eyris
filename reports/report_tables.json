@@ -1,0 +1,535 @@
+{
+ "params": {
+  "risk_method": "invvol",
+  "lookback_days": 40,
+  "stock_cap": 0.1,
+  "gross": 0.5,
+  "use_alpha": false,
+  "tilt": 0.0,
+  "lam": 0.25,
+  "band": 0.05,
+  "min_trade": 0.002
+ },
+ "periods": {
+  "train": {
+   "Eyris agent": {
+    "median": {
+     "cumulative_return": 0.004352378965599479,
+     "sharpe_ratio": 1.5674589775333927,
+     "maximum_drawdown": 0.014311798652257485,
+     "turnover": 0.004759523572261132,
+     "rank_score": 6.5
+    },
+    "mean": {
+     "cumulative_return": 0.0025182891480260675,
+     "sharpe_ratio": 1.4284802009068231,
+     "maximum_drawdown": 0.017913511682822167,
+     "turnover": 0.004787498133012059,
+     "rank_score": 6.643684210526316
+    },
+    "worst": {
+     "cumulative_return": -0.05972121526039931,
+     "sharpe_ratio": -11.345001789858575,
+     "maximum_drawdown": 0.06190625190448435,
+     "turnover": 0.004996378597996421,
+     "rank_score": 11.5
+    }
+   },
+   "Eyris, 100% invested": {
+    "median": {
+     "cumulative_return": 0.00869407545748424,
+     "sharpe_ratio": 1.6030584963183685,
+     "maximum_drawdown": 0.028315441723871678,
+     "turnover": 0.009730846012722637,
+     "rank_score": 9.875
+    },
+    "mean": {
+     "cumulative_return": 0.0049405110234111045,
+     "sharpe_ratio": 1.4437377514167224,
+     "maximum_drawdown": 0.03549257701269805,
+     "turnover": 0.00977255269717108,
+     "rank_score": 10.121052631578948
+    },
+    "worst": {
+     "cumulative_return": -0.11919186150788752,
+     "sharpe_ratio": -11.372497892217734,
+     "maximum_drawdown": 0.12327401616756303,
+     "turnover": 0.010646699173584073,
+     "rank_score": 18.0
+    }
+   },
+   "EW buy & hold": {
+    "median": {
+     "cumulative_return": 0.009682650646405389,
+     "sharpe_ratio": 1.6845550912694098,
+     "maximum_drawdown": 0.029668246634492225,
+     "turnover": 0.00951429522858095,
+     "rank_score": 8.5
+    },
+    "mean": {
+     "cumulative_return": 0.006507952029916384,
+     "sharpe_ratio": 1.5643269131317843,
+     "maximum_drawdown": 0.038965162375564244,
+     "turnover": 0.009542278449841481,
+     "rank_score": 8.539736842105263
+    },
+    "worst": {
+     "cumulative_return": -0.1301667395392926,
+     "sharpe_ratio": -11.897171306261399,
+     "maximum_drawdown": 0.1323880732204175,
+     "turnover": 0.009794127441186273,
+     "rank_score": 13.5
+    }
+   },
+   "EW rebalanced (every round)": {
+    "median": {
+     "cumulative_return": 0.00930626655819733,
+     "sharpe_ratio": 1.5609566956632999,
+     "maximum_drawdown": 0.029997766119954236,
+     "turnover": 0.012589921230365838,
+     "rank_score": 11.5
+    },
+    "mean": {
+     "cumulative_return": 0.005689832190432664,
+     "sharpe_ratio": 1.4717954813966234,
+     "maximum_drawdown": 0.03933840202370074,
+     "turnover": 0.012683920380557741,
+     "rank_score": 11.443947368421053
+    },
+    "worst": {
+     "cumulative_return": -0.13257543430985974,
+     "sharpe_ratio": -11.896088437346785,
+     "maximum_drawdown": 0.1330947488533625,
+     "turnover": 0.014039795023571573,
+     "rank_score": 16.0
+    }
+   },
+   "Inverse-vol, full rebalance": {
+    "median": {
+     "cumulative_return": 0.008589397205427063,
+     "sharpe_ratio": 1.5790571328560437,
+     "maximum_drawdown": 0.02858571062375187,
+     "turnover": 0.015689115113591716,
+     "rank_score": 10.5
+    },
+    "mean": {
+     "cumulative_return": 0.004484603330511071,
+     "sharpe_ratio": 1.3745003360075363,
+     "maximum_drawdown": 0.03568385881573189,
+     "turnover": 0.015728265126912402,
+     "rank_score": 10.551842105263157
+    },
+    "worst": {
+     "cumulative_return": -0.12111657262096465,
+     "sharpe_ratio": -11.387314294184186,
+     "maximum_drawdown": 0.12545956141490835,
+     "turnover": 0.018015369993089596,
+     "rank_score": 17.5
+    }
+   },
+   "Cash": {
+    "median": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 8.75
+    },
+    "mean": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 6.970789473684211
+    },
+    "worst": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 12.0
+    }
+   },
+   "_windows": 950
+  },
+  "validation": {
+   "Eyris agent": {
+    "median": {
+     "cumulative_return": 0.008560139134059508,
+     "sharpe_ratio": 2.797459211851348,
+     "maximum_drawdown": 0.013017056854474698,
+     "turnover": 0.0047595234771182025,
+     "rank_score": 6.5
+    },
+    "mean": {
+     "cumulative_return": 0.004491479332043018,
+     "sharpe_ratio": 2.3817081240451086,
+     "maximum_drawdown": 0.018917274056872366,
+     "turnover": 0.004784577220043989,
+     "rank_score": 6.417151162790698
+    },
+    "worst": {
+     "cumulative_return": -0.059917276568690836,
+     "sharpe_ratio": -9.649181606563827,
+     "maximum_drawdown": 0.07938055094030654,
+     "turnover": 0.0050379772529053546,
+     "rank_score": 10.5
+    }
+   },
+   "Eyris, 100% invested": {
+    "median": {
+     "cumulative_return": 0.016559573987794396,
+     "sharpe_ratio": 2.7618706356935103,
+     "maximum_drawdown": 0.025700647273903705,
+     "turnover": 0.009734068344087174,
+     "rank_score": 9.25
+    },
+    "mean": {
+     "cumulative_return": 0.008874263049035686,
+     "sharpe_ratio": 2.394505818009698,
+     "maximum_drawdown": 0.037448587506082084,
+     "turnover": 0.00978775229142708,
+     "rank_score": 9.356104651162791
+    },
+    "worst": {
+     "cumulative_return": -0.11962296210292356,
+     "sharpe_ratio": -9.62115890642826,
+     "maximum_drawdown": 0.15655674467911745,
+     "turnover": 0.010792759961229484,
+     "rank_score": 16.0
+    }
+   },
+   "EW buy & hold": {
+    "median": {
+     "cumulative_return": 0.018937784663646928,
+     "sharpe_ratio": 2.740514760073551,
+     "maximum_drawdown": 0.02749438673719011,
+     "turnover": 0.00951429522858095,
+     "rank_score": 8.125
+    },
+    "mean": {
+     "cumulative_return": 0.010099113821350245,
+     "sharpe_ratio": 2.251617301703102,
+     "maximum_drawdown": 0.041548761800833105,
+     "turnover": 0.009538699200610484,
+     "rank_score": 8.561773255813954
+    },
+    "worst": {
+     "cumulative_return": -0.12479331614054046,
+     "sharpe_ratio": -10.038133665310328,
+     "maximum_drawdown": 0.1668353932124397,
+     "turnover": 0.009794127441186273,
+     "rank_score": 13.5
+    }
+   },
+   "EW rebalanced (every round)": {
+    "median": {
+     "cumulative_return": 0.019080228619465345,
+     "sharpe_ratio": 2.6347091002032945,
+     "maximum_drawdown": 0.02745532155583478,
+     "turnover": 0.012874153051755696,
+     "rank_score": 11.0
+    },
+    "mean": {
+     "cumulative_return": 0.009348938712892942,
+     "sharpe_ratio": 2.1841183758807303,
+     "maximum_drawdown": 0.04178843201240485,
+     "turnover": 0.0129826803653746,
+     "rank_score": 11.125
+    },
+    "worst": {
+     "cumulative_return": -0.125506889537231,
+     "sharpe_ratio": -9.982314091319148,
+     "maximum_drawdown": 0.16735317780327716,
+     "turnover": 0.014690239080307544,
+     "rank_score": 15.25
+    }
+   },
+   "Inverse-vol, full rebalance": {
+    "median": {
+     "cumulative_return": 0.015494904401219256,
+     "sharpe_ratio": 2.7409972515735035,
+     "maximum_drawdown": 0.02536014638206095,
+     "turnover": 0.01598248412256377,
+     "rank_score": 10.0
+    },
+    "mean": {
+     "cumulative_return": 0.007888933205091432,
+     "sharpe_ratio": 2.191149411798522,
+     "maximum_drawdown": 0.037893037712253094,
+     "turnover": 0.016068976404109505,
+     "rank_score": 10.11482558139535
+    },
+    "worst": {
+     "cumulative_return": -0.1188836146725527,
+     "sharpe_ratio": -9.466694097295683,
+     "maximum_drawdown": 0.15649028938481443,
+     "turnover": 0.018290059539049993,
+     "rank_score": 15.75
+    }
+   },
+   "Cash": {
+    "median": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 9.5
+    },
+    "mean": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 7.800872093023256
+    },
+    "worst": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 12.0
+    }
+   },
+   "_windows": 172
+  },
+  "holdout": {
+   "Eyris agent": {
+    "median": {
+     "cumulative_return": 0.005210468747680497,
+     "sharpe_ratio": 2.0315780296252,
+     "maximum_drawdown": 0.013332482378826352,
+     "turnover": 0.004759523477118203,
+     "rank_score": 6.5
+    },
+    "mean": {
+     "cumulative_return": 0.004599725144962616,
+     "sharpe_ratio": 2.074379343541298,
+     "maximum_drawdown": 0.01336987932557128,
+     "turnover": 0.004816690200880742,
+     "rank_score": 6.44
+    },
+    "worst": {
+     "cumulative_return": -0.014366129019363738,
+     "sharpe_ratio": -4.8262232261623685,
+     "maximum_drawdown": 0.020912972031667733,
+     "turnover": 0.004899509657621826,
+     "rank_score": 9.5
+    }
+   },
+   "Eyris, 100% invested": {
+    "median": {
+     "cumulative_return": 0.010448612985728412,
+     "sharpe_ratio": 2.091848756613193,
+     "maximum_drawdown": 0.02652948261520561,
+     "turnover": 0.009794876691524831,
+     "rank_score": 9.25
+    },
+    "mean": {
+     "cumulative_return": 0.0093979014873799,
+     "sharpe_ratio": 2.1270422786836933,
+     "maximum_drawdown": 0.026264729700745938,
+     "turnover": 0.00978874488366482,
+     "rank_score": 9.525
+    },
+    "worst": {
+     "cumulative_return": -0.02746288074169201,
+     "sharpe_ratio": -4.698979103625168,
+     "maximum_drawdown": 0.04134406122663875,
+     "turnover": 0.009984096408687136,
+     "rank_score": 13.0
+    }
+   },
+   "EW buy & hold": {
+    "median": {
+     "cumulative_return": 0.008268070838468922,
+     "sharpe_ratio": 1.8141009754802604,
+     "maximum_drawdown": 0.029485617966650758,
+     "turnover": 0.00951429522858095,
+     "rank_score": 8.5
+    },
+    "mean": {
+     "cumulative_return": 0.00946558795528807,
+     "sharpe_ratio": 1.9435701103712975,
+     "maximum_drawdown": 0.030203648715148416,
+     "turnover": 0.00962622811362308,
+     "rank_score": 8.4
+    },
+    "worst": {
+     "cumulative_return": -0.038426156768231357,
+     "sharpe_ratio": -5.491355584223888,
+     "maximum_drawdown": 0.048295028230569435,
+     "turnover": 0.009794127441186273,
+     "rank_score": 9.875
+    }
+   },
+   "EW rebalanced (every round)": {
+    "median": {
+     "cumulative_return": 0.007930789188408727,
+     "sharpe_ratio": 1.8073026929724407,
+     "maximum_drawdown": 0.029559330340442353,
+     "turnover": 0.013010640295033767,
+     "rank_score": 11.0
+    },
+    "mean": {
+     "cumulative_return": 0.008976836114791092,
+     "sharpe_ratio": 1.8853085313085491,
+     "maximum_drawdown": 0.030554722152428448,
+     "turnover": 0.012988213244866034,
+     "rank_score": 11.155
+    },
+    "worst": {
+     "cumulative_return": -0.040609859685938,
+     "sharpe_ratio": -5.738264306242703,
+     "maximum_drawdown": 0.04868904799540663,
+     "turnover": 0.013443076448129025,
+     "rank_score": 14.0
+    }
+   },
+   "Inverse-vol, full rebalance": {
+    "median": {
+     "cumulative_return": 0.010139597173319137,
+     "sharpe_ratio": 2.07116140339419,
+     "maximum_drawdown": 0.02641003162205331,
+     "turnover": 0.01617522038013617,
+     "rank_score": 9.0
+    },
+    "mean": {
+     "cumulative_return": 0.010156315469932701,
+     "sharpe_ratio": 2.2362198005995433,
+     "maximum_drawdown": 0.026045576060370307,
+     "turnover": 0.016134946282351362,
+     "rank_score": 9.195
+    },
+    "worst": {
+     "cumulative_return": -0.026880397124185218,
+     "sharpe_ratio": -4.490701037607443,
+     "maximum_drawdown": 0.0408110172015089,
+     "turnover": 0.017269814577038897,
+     "rank_score": 12.0
+    }
+   },
+   "Cash": {
+    "median": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 8.0
+    },
+    "mean": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 7.825
+    },
+    "worst": {
+     "cumulative_return": 0.0,
+     "sharpe_ratio": 0.0,
+     "maximum_drawdown": 0.0,
+     "turnover": 0.0,
+     "rank_score": 11.5
+    }
+   },
+   "_windows": 50
+  }
+ },
+ "equity_2025": {
+  "Eyris agent": {
+   "cumulative_return": 0.08643123339901071,
+   "sharpe_ratio": 1.2411382633819883,
+   "maximum_drawdown": 0.09903223647927759,
+   "turnover": 0.00031357281190447017
+  },
+  "EW buy & hold": {
+   "cumulative_return": 0.19008456101879467,
+   "sharpe_ratio": 1.2005430770714982,
+   "maximum_drawdown": 0.20854044942578653,
+   "turnover": 0.0005738087300407811
+  },
+  "EW rebalanced (every round)": {
+   "cumulative_return": 0.18992540547045778,
+   "sharpe_ratio": 1.1728073663571488,
+   "maximum_drawdown": 0.21122600876746356,
+   "turnover": 0.004013225304750544
+  },
+  "Inverse-vol, full rebalance": {
+   "cumulative_return": 0.16666740340145259,
+   "sharpe_ratio": 1.1629530554091656,
+   "maximum_drawdown": 0.19757220749099413,
+   "turnover": 0.00730312678458311
+  }
+ },
+ "fill_sensitivity": {
+  "open": {
+   "median": {
+    "cumulative_return": 0.008560139134059508,
+    "sharpe_ratio": 2.4297852625540886,
+    "maximum_drawdown": 0.013030315143916154,
+    "turnover": 0.0047595234771182025,
+    "rank_score": 6.75
+   },
+   "mean": {
+    "cumulative_return": 0.004494260401534555,
+    "sharpe_ratio": 2.0184096237227944,
+    "maximum_drawdown": 0.019340758832534142,
+    "turnover": 0.0047850357511968564,
+    "rank_score": 6.5101744186046515
+   },
+   "worst": {
+    "cumulative_return": -0.059917276568690836,
+    "sharpe_ratio": -7.983523214948999,
+    "maximum_drawdown": 0.07948676074528319,
+    "turnover": 0.005037944497598936,
+    "rank_score": 10.75
+   }
+  },
+  "mid": {
+   "median": {
+    "cumulative_return": 0.008560139134059508,
+    "sharpe_ratio": 2.797459211851348,
+    "maximum_drawdown": 0.013017056854474698,
+    "turnover": 0.0047595234771182025,
+    "rank_score": 6.5
+   },
+   "mean": {
+    "cumulative_return": 0.004491479332043018,
+    "sharpe_ratio": 2.3817081240451086,
+    "maximum_drawdown": 0.018917274056872366,
+    "turnover": 0.004784577220043989,
+    "rank_score": 6.417151162790698
+   },
+   "worst": {
+    "cumulative_return": -0.059917276568690836,
+    "sharpe_ratio": -9.649181606563827,
+    "maximum_drawdown": 0.07938055094030654,
+    "turnover": 0.0050379772529053546,
+    "rank_score": 10.5
+   }
+  },
+  "close": {
+   "median": {
+    "cumulative_return": 0.008560139134059508,
+    "sharpe_ratio": 2.4580118482161613,
+    "maximum_drawdown": 0.013017615383342868,
+    "turnover": 0.0047595234771182025,
+    "rank_score": 6.75
+   },
+   "mean": {
+    "cumulative_return": 0.004493911927040129,
+    "sharpe_ratio": 2.067980332406378,
+    "maximum_drawdown": 0.01915639004588095,
+    "turnover": 0.0047850364239788385,
+    "rank_score": 6.513081395348837
+   },
+   "worst": {
+    "cumulative_return": -0.059917276568690836,
+    "sharpe_ratio": -7.801371243915334,
+    "maximum_drawdown": 0.07949086677175904,
+    "turnover": 0.005038010417307401,
+    "rank_score": 10.75
+   }
+  }
+ }
+}

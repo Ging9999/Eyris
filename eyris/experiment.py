@@ -4,9 +4,9 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from . import data
+from . import alpha, data
 from .agent import Agent
-from .backtest import (agent_targets, baseline_policies, evaluate_windows, simulate,
+from .backtest import (agent_targets, baseline_policies, evaluate_windows, rank_in_field, simulate,
                        summarize, target_policy, windows)
 from .config import Params
 
@@ -26,6 +26,8 @@ class Study:
         self.p, self.r = data.load(fill=fill)
         self.period = period
         days = data.day_range(self.p, *PERIODS[period])
+        # warm-up: every lookback (and alpha feature) needs MIN_BARS of history
+        days = days[days > self.p.day[alpha.MIN_BARS]]
         self.ks = np.arange(np.searchsorted(self.r.day, days[0]), self.r.day_last_round[days[-1]] + 1)
         self.k_first = int(self.ks[0])
         self.wins = windows(self.r, days, stride=stride)
@@ -36,8 +38,12 @@ class Study:
             for k0, k1 in self.wins]
         self._targets = {}
 
-    def field_for(self, exclude=None):
-        return [[m for n, m in w.items() if n != exclude] for w in self.field_window_metrics]
+    def field_for(self, exclude=None, variant="full"):
+        """Reference field per window. "active" drops the passive buy-and-hold
+        strategies, approximating a field of teams that trade every day."""
+        def keep(n):
+            return n != exclude and not (variant == "active" and "buy_hold" in n)
+        return [[m for n, m in w.items() if keep(n)] for w in self.field_window_metrics]
 
     def targets(self, params, model=None):
         key = (params.risk_method, params.lookback_days, params.stock_cap, params.gross,
@@ -46,12 +52,25 @@ class Study:
             self._targets[key] = agent_targets(Agent(params, model), self.p, self.r, self.ks)
         return self._targets[key]
 
-    def evaluate(self, params, model=None):
+    def evaluate(self, params, model=None, variant="full"):
         pol = target_policy(self.targets(params, model), self.k_first, params)
-        return evaluate_windows(self.r, self.wins, pol, self.field_for())
+        return evaluate_windows(self.r, self.wins, pol, self.field_for(variant=variant))
 
-    def evaluate_baseline(self, name):
-        return evaluate_windows(self.r, self.wins, self.field[name], self.field_for(exclude=name))
+    def evaluate_both(self, params, model=None):
+        """Simulate once, rank against both field variants."""
+        df = self.evaluate(params, model)
+        df["rank_active"] = [rank_in_field(row, f) for row, f in
+                             zip(df.to_dict("records"), self.field_for(variant="active"))]
+        return df
+
+    def evaluate_baseline(self, name, variant="full"):
+        return evaluate_windows(self.r, self.wins, self.field[name], self.field_for(name, variant))
+
+    def evaluate_baseline_both(self, name):
+        df = self.evaluate_baseline(name)
+        df["rank_active"] = [rank_in_field(row, f) for row, f in
+                             zip(df.to_dict("records"), self.field_for(name, "active"))]
+        return df
 
     def continuous(self, policy):
         """One portfolio across the whole period (for equity curves)."""
@@ -62,4 +81,8 @@ def summary_row(df):
     s = summarize(df)
     row = {f"{m}_{stat}": s.loc[m, stat] for m in s.index for stat in ("median", "worst")}
     row["rank_mean"] = df["rank_score"].mean()
+    if "rank_active" in df:
+        row["rank_active_median"] = df["rank_active"].median()
+        row["rank_active_mean"] = df["rank_active"].mean()
+        row["rank_active_worst"] = df["rank_active"].max()
     return row

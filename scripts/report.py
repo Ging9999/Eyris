@@ -37,23 +37,26 @@ def load_selected():
 
 
 def period_table(study, params, model):
-    rows = {"Eyris agent": study.evaluate(params, model)}
+    rows = {"Eyris agent": study.evaluate_both(params, model)}
     if params.use_alpha:
-        rows["Eyris without alpha"] = study.evaluate(replace(params, use_alpha=False, tilt=0.0))
+        rows["Eyris without alpha"] = study.evaluate_both(replace(params, use_alpha=False, tilt=0.0))
+    rows["Eyris, 100% invested"] = study.evaluate_both(replace(params, gross=1.0))
     for label, name in BASELINES.items():
-        rows[label] = study.evaluate_baseline(name)
-    rows["Cash"] = study.evaluate_baseline("cash")
+        rows[label] = study.evaluate_baseline_both(name)
+    rows["Cash"] = study.evaluate_baseline_both("cash")
     return rows
 
 
-def fmt_table(rows, n_field):
-    lines = ["| Strategy | Median rank (1 = best of %d) | Worst rank | Median 15d return | Worst 15d return "
-             "| Median Sharpe | Median MDD | Worst MDD | Median turnover |" % n_field,
-             "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+def fmt_table(rows, n_field, n_active):
+    lines = ["| Strategy | Median rank (of %d) | Worst rank | Median rank, active field (of %d) "
+             "| Median 15d return | Worst 15d return "
+             "| Median Sharpe | Median MDD | Worst MDD | Median turnover |" % (n_field, n_active),
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for name, df in rows.items():
         s = summarize(df)
         lines.append(
             f"| {name} | {s.loc['rank_score', 'median']:.2f} | {s.loc['rank_score', 'worst']:.2f} "
+            f"| {df['rank_active'].median():.2f} "
             f"| {s.loc['cumulative_return', 'median']:+.2%} | {s.loc['cumulative_return', 'worst']:+.2%} "
             f"| {s.loc['sharpe_ratio', 'median']:.2f} | {s.loc['maximum_drawdown', 'median']:.2%} "
             f"| {s.loc['maximum_drawdown', 'worst']:.2%} | {s.loc['turnover', 'median']:.4f} |")
@@ -148,8 +151,8 @@ def main():
     tables, md_tables = {}, {}
     for name, st in studies.items():
         rows = period_table(st, params, model)
-        n_field = len(st.field) + 1
-        md_tables[name] = fmt_table(rows, n_field)
+        n_field = len(st.field_for()[0]) + 1
+        md_tables[name] = fmt_table(rows, n_field, len(st.field_for(variant="active")[0]) + 1)
         tables[name] = {k: summarize(v).to_dict() for k, v in rows.items()}
         tables[name]["_windows"] = len(st.wins)
         if name != "train":

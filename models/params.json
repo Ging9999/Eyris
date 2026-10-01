@@ -1,0 +1,15 @@
+{
+ "params": {
+  "risk_method": "invvol",
+  "lookback_days": 40,
+  "stock_cap": 0.1,
+  "gross": 0.5,
+  "use_alpha": false,
+  "tilt": 0.0,
+  "lam": 0.25,
+  "band": 0.05,
+  "min_trade": 0.002
+ },
+ "model": null,
+ "note": "Baseline selected by scripts/tune.py (validation 2025-01..09). Alpha decision: see reports/alpha_experiment.json."
+}

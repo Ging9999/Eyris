@@ -11,3 +11,4 @@ output/
 .icaif/
 .env
 models/*.txt.tmp
+models/alpha_lgbm*.txt

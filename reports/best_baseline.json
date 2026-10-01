@@ -1,0 +1,39 @@
+{
+ "params": {
+  "risk_method": "invvol",
+  "lookback_days": 40,
+  "stock_cap": 0.1,
+  "gross": 0.5,
+  "use_alpha": false,
+  "tilt": 0.0,
+  "lam": 0.25,
+  "band": 0.05,
+  "min_trade": 0.002
+ },
+ "validation": {
+  "risk_method": "invvol",
+  "lookback_days": 40,
+  "gross": 0.5,
+  "lam": 0.25,
+  "band": 0.05,
+  "cumulative_return_median": 0.008560139134059508,
+  "cumulative_return_worst": -0.059917276568690836,
+  "sharpe_ratio_median": 2.797459211851348,
+  "sharpe_ratio_worst": -9.649181606563827,
+  "maximum_drawdown_median": 0.013017056854474698,
+  "maximum_drawdown_worst": 0.07938055094030654,
+  "turnover_median": 0.0047595234771182025,
+  "turnover_worst": 0.0050379772529053546,
+  "rank_score_median": 6.5,
+  "rank_score_worst": 10.5,
+  "rank_mean": 6.417151162790698,
+  "rank_active_median": 3.5,
+  "rank_active_mean": 3.5,
+  "rank_active_worst": 5.25,
+  "pct_full": 0.2391304347826087,
+  "pct_active": 0.20833333333333334,
+  "selection": 0.223731884057971,
+  "worst_pct": 0.41304347826086957
+ },
+ "rule": "min mean(median rank percentile in full & active fields), tie-break worst window"
+}
