@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+data/*.parquet
+data/*.zip
+data/live/
+starter-kit/
+private/
+output/
+.icaif/
+.env
+models/*.txt.tmp
