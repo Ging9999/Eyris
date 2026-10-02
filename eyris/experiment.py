@@ -16,6 +16,11 @@ PERIODS = {
     "validation": ("2025-01-01", "2025-09-30"),
     "holdout": ("2025-10-01", "2025-12-31"),
 }
+# Field of LLM-agent-style competitors (see backtest.baseline_policies) plus a
+# team that misses rounds (cash) and simple diversifiers.
+LLM_FIELD = {"kit_momentum_top5", "mom20_top10_daily", "ew_rebal_daily", "cash", "llm_news_chaser",
+             "llm_vol_blind_top3", "llm_overtrader_hourly", "llm_regime_contrarian",
+             "random_daily_0", "random_daily_1", "random_daily_2", "random_daily_3", "random_daily_4"}
 FIELD_REFERENCE = Params(risk_method="invvol", lookback_days=20, stock_cap=0.30, gross=1.0)
 
 
@@ -42,7 +47,13 @@ class Study:
         """Reference field per window. "active" drops the passive buy-and-hold
         strategies, approximating a field of teams that trade every day."""
         def keep(n):
-            return n != exclude and not (variant == "active" and "buy_hold" in n)
+            if n == exclude:
+                return False
+            if variant == "active":
+                return "buy_hold" not in n
+            if variant == "llm":
+                return n in LLM_FIELD
+            return True
         return [[m for n, m in w.items() if keep(n)] for w in self.field_window_metrics]
 
     def targets(self, params, model=None):
@@ -57,10 +68,11 @@ class Study:
         return evaluate_windows(self.r, self.wins, pol, self.field_for(variant=variant))
 
     def evaluate_both(self, params, model=None):
-        """Simulate once, rank against both field variants."""
+        """Simulate once, rank against all field variants."""
         df = self.evaluate(params, model)
-        df["rank_active"] = [rank_in_field(row, f) for row, f in
-                             zip(df.to_dict("records"), self.field_for(variant="active"))]
+        recs = df.to_dict("records")
+        for v in ("active", "llm"):
+            df[f"rank_{v}"] = [rank_in_field(row, f) for row, f in zip(recs, self.field_for(variant=v))]
         return df
 
     def evaluate_baseline(self, name, variant="full"):
@@ -68,8 +80,9 @@ class Study:
 
     def evaluate_baseline_both(self, name):
         df = self.evaluate_baseline(name)
-        df["rank_active"] = [rank_in_field(row, f) for row, f in
-                             zip(df.to_dict("records"), self.field_for(name, "active"))]
+        recs = df.to_dict("records")
+        for v in ("active", "llm"):
+            df[f"rank_{v}"] = [rank_in_field(row, f) for row, f in zip(recs, self.field_for(name, v))]
         return df
 
     def continuous(self, policy):
@@ -85,4 +98,8 @@ def summary_row(df):
         row["rank_active_median"] = df["rank_active"].median()
         row["rank_active_mean"] = df["rank_active"].mean()
         row["rank_active_worst"] = df["rank_active"].max()
+    if "rank_llm" in df:
+        row["rank_llm_median"] = df["rank_llm"].median()
+        row["rank_llm_mean"] = df["rank_llm"].mean()
+        row["rank_llm_worst"] = df["rank_llm"].max()
     return row

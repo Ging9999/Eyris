@@ -239,3 +239,26 @@ def test_study_target_cache_distinguishes_all_target_params():
     finally:
         ex.agent_targets = orig
     assert len(calls) == 3
+
+
+def test_factor_model_has_no_lookahead_and_matches_single_path():
+    from eyris.factors import NAMES, FactorModel
+    df = synthetic_long(n_days=90, seed=3)
+    p = build_panels(df)
+    r = build_rounds(p)
+    model = FactorModel({n: 1.0 for n in NAMES})
+    params = Params(use_alpha=True, tilt=0.5, lookback_days=20)
+    cut_time = p.times[int(r.exec_bar[len(r) - 40])]
+    bad = df.copy()
+    fut = bad["timestamp_et"] >= cut_time
+    bad.loc[fut, ["open", "high", "low", "close"]] *= 1.3
+    p2 = build_panels(bad)
+    r2 = build_rounds(p2)
+    past = np.flatnonzero(p.times[r.info_end] < cut_time)
+    past = past[past >= 50 * 7]
+    t1 = agent_targets(Agent(params, model), p, r, past)
+    t2 = agent_targets(Agent(params, model), p2, r2, past)
+    np.testing.assert_array_equal(t1, t2)
+    for j in range(0, len(past), 11):
+        single = Agent(params, model).target(p.head(int(r.info_end[past[j]])))
+        np.testing.assert_allclose(t1[j], sanitize(single), atol=2e-8)

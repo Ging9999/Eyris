@@ -102,8 +102,11 @@ def agent_targets(agent, p: Panels, r: Rounds, ks):
     for j, k in enumerate(ks):
         out[j] = agent.risk_target(p.head(int(r.info_end[k])))
     if agent.alpha_on:
-        raw = alpha.raw_features(p.close, p.volume, p.high, p.low)
-        X = alpha.cs_features(raw[r.info_end[ks]])
+        if hasattr(agent.model, "batch_features"):
+            X = agent.model.batch_features(p, r.info_end[ks])
+        else:
+            raw = alpha.raw_features(p.close, p.volume, p.high, p.low)
+            X = alpha.cs_features(raw[r.info_end[ks]])
         scores = agent.model.predict(X)
         for j in range(len(ks)):
             out[j] = alpha.tilt(out[j], scores[j], agent.params.tilt, agent.params.stock_cap)
@@ -157,6 +160,31 @@ def baseline_policies(p: Panels, r: Rounds, k_first, invvol_targets, n_random=10
     }
     for i, w0 in enumerate(randoms):
         field[f"random_buy_hold_{i}"] = buy_hold(w0)
+    # LLM-agent-style teams, modelled on behaviour documented in 2024-26 studies:
+    # daily discretionary picks (StockBench), volatility-blind concentrated sizing
+    # and overtrading (production fleet study, arXiv 2609.05663), and exposure that
+    # is too cautious after rallies / too aggressive after losses (FINSABER).
+    def daily_only(fn):
+        return lambda k, w: fn(k) if (r.number[k] == 1 or w.sum() < 1e-9) else HOLD
+
+    def top(scores, n, wt):
+        out = np.zeros(N_ASSETS)
+        out[np.argsort(-scores, kind="stable")[:n]] = wt
+        return out
+
+    def ret(k, bars):
+        e = r.info_end[k]
+        return p.close[e] / p.close[max(0, e - bars)] - 1
+
+    field["llm_news_chaser"] = daily_only(lambda k: top(ret(k, 7), 5, 0.2))
+    field["llm_vol_blind_top3"] = daily_only(lambda k: top(ret(k, 35), 3, 0.3))
+    field["llm_overtrader_hourly"] = lambda k, w: top(ret(k, 1), 5, 0.2)
+
+    def finsaber_exposure(k):
+        g = float(np.clip(0.6 - 4.0 * ret(k, 140).mean(), 0.2, 1.0))
+        return top(ret(k, 140), 10, g / 10)
+    field["llm_regime_contrarian"] = daily_only(finsaber_exposure)
+
     # Noisy active "teams": fresh random portfolio every day (e.g. an LLM picker).
     n_days = len(p.days)
     for i in range(n_random // 2):

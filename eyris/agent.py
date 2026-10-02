@@ -66,7 +66,8 @@ class Agent:
         if self.alpha_on:
             if len(p) < alpha.MIN_BARS:
                 raise ValueError("not enough history for alpha features")
-            scores = self.model.predict(alpha.features_at(p))
+            feats = self.model.features_at(p) if hasattr(self.model, "features_at") else alpha.features_at(p)
+            scores = self.model.predict(feats)
             w = alpha.tilt(w, scores, self.params.tilt, self.params.stock_cap)
         return w
 
