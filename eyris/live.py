@@ -175,14 +175,40 @@ def save_state(decision: Decision, prices, round_id):
 
 
 # --------------------------------------------------------------------------- decision
-def decide_round(bars_grid, current_weights, agent=None):
-    """Pure decision from a completed-bar snapshot. Never raises."""
+def decide_round(bars_grid, current_weights, agent=None, trim=None, restore=None):
+    """Pure decision from a completed-bar snapshot (+ event flags). Never raises."""
     agent = agent or load_agent()
     try:
         panels = build_panels(bars_grid)
     except Exception as e:
         return Decision(None, reason=f"error: bad snapshot: {e}")
-    return agent.decide(panels, current_weights)
+    return agent.decide(panels, current_weights, trim=trim, restore=restore)
+
+
+def round_flags(params, round_id, deadline, history_days, out_dir):
+    """Earnings-event trims/restores plus the reduce-only news veto for one round."""
+    from . import events, news
+    trim, restore, info = {}, set(), {}
+    day, n = round_id.split("-", 1)[1].rsplit("-r", 1)
+    if params.event_mode != "off":
+        try:
+            cal = events.refresh_calendar(SNAPSHOTS, day)
+            sched = events.EventSchedule(cal, events.trading_dates(history_days), events.static_move_fn())
+            trim, restore = sched.flags(day, int(n), params)
+            info["event_trims"] = {UNIVERSE[i]: c for i, c in trim.items()}
+            info["event_restores"] = sorted(UNIVERSE[i] for i in restore)
+        except Exception as e:
+            info["event_error"] = f"{type(e).__name__}: {e}"
+    if params.news_veto:
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            vt, vlog = news.veto(deadline, log_dir=out_dir)
+            for i, c in vt.items():
+                trim[i] = max(trim.get(i, 0.0), c)
+            info["news_trims"] = {UNIVERSE[i]: c for i, c in vt.items()}
+            info["news_status"] = vlog.get("error") or vlog.get("result") or "ok"
+        else:
+            info["news_status"] = "skipped: ANTHROPIC_API_KEY not set"
+    return trim, restore, info
 
 
 def decision_payload(decision, phase, round_id):
@@ -234,13 +260,17 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_ro
         first_round = round_id in ("validation-2026-10-08-r1", "official-2026-10-12-r1")
     if cur is None and first_round:
         cur, source = np.zeros(N_ASSETS), "assumed_initial_cash"
+    flag_info = {}
     if cur is None:
         source = "none"
         decision = Decision(None, reason="unknown current holdings")
     else:
-        decision = decide_round(grid, cur)
+        agent = load_agent()
+        days = pd.DatetimeIndex(grid["timestamp_et"].dt.normalize().unique()).sort_values()
+        trim, restore, flag_info = round_flags(agent.params, round_id, deadline_of(round_id), days, out_dir)
+        decision = decide_round(grid, cur, agent, trim, restore)
     log = {"round_id": round_id, "as_of": str(as_of), "holdings_source": source,
-           "portfolio_shape": _shape(portfolio),
+           "portfolio_shape": _shape(portfolio), **flag_info,
            "last_bar": str(grid["timestamp_et"].max()), "hold": decision.hold, "reason": decision.reason,
            "target": None if decision.target is None else dict(zip(UNIVERSE, map(float, decision.target))),
            "weights": decision.as_dict()}

@@ -84,13 +84,55 @@ models/params.json   the selected configuration used live
 reports/             generated results
 ```
 
-## Setup
+## Run it on your own computer
+
+You need Python 3.10 or newer and git.
+
+**macOS / Linux**
 
 ```sh
-python -m venv .venv && . .venv/bin/activate
+git clone https://github.com/Ging9999/Eyris.git
+cd Eyris
+git checkout claude/icaif-2026-trading-agent-rxvprb
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-python scripts/download_data.py      # data/hourly_market_data_2021_2026.parquet + starter-kit/
+python scripts/download_data.py      # historical data + official starter kit
+python -m pytest -q                  # should print "34 passed"
 ```
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/Ging9999/Eyris.git
+cd Eyris
+git checkout claude/icaif-2026-trading-agent-rxvprb
+py -m venv .venv; .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python scripts\download_data.py
+python -m pytest -q
+```
+
+**Secrets**: set these as environment variables (or put the first three in `starter-kit/.env`). Never commit them.
+
+| Variable | Needed for | Where it comes from |
+|---|---|---|
+| `CODABENCH_TOKEN` | uploading decisions | your Codabench account settings |
+| `TEAM_ID`, `TEAM_TOKEN` | uploading decisions | the private receipt from registering (shown once) |
+| `ANTHROPIC_API_KEY` | optional news veto | console.anthropic.com; without it the veto is skipped |
+| `SEC_USER_AGENT` | optional SEC 8-K feed | `"Your Name you@example.com"` (SEC requires a contact); without it only Yahoo headlines are used |
+
+**Each round** (or schedule it with cron on macOS/Linux, or Task Scheduler on Windows):
+run `bash scripts/cloud_round.sh` (macOS/Linux) or `python -m eyris.live run` (Windows) at **08:50 ET**
+for round 1 and at **10:08, 11:08, 12:08, 13:08, 14:08, 15:08 ET** for rounds 2–7, on Oct 8–9 and Oct 12–30.
+Outside an open round window it exits with `NO_OPEN_ROUND`, so extra runs are harmless.
+Example crontab (machine clock in ET):
+
+```
+50 8 8,9,12-16,19-23,26-30 10 *  cd ~/Eyris && mkdir -p private && .venv/bin/python -m eyris.live run >> private/cron.log 2>&1
+8 10-15 8,9,12-16,19-23,26-30 10 *  cd ~/Eyris && mkdir -p private && .venv/bin/python -m eyris.live run >> private/cron.log 2>&1
+```
+
+Keep the computer awake and online during market hours. If a run is missed, the portfolio is simply held for that round.
 
 ## Test
 
@@ -124,7 +166,7 @@ python scripts/report.py            # reports/backtest_report.md (+ holdout, eva
    Store `TEAM_ID` / `TEAM_TOKEN`. Keep `.env`, `.icaif/` and `private/` out of git (already ignored).
 2. Configure `starter-kit/.env`: `CODABENCH_TOKEN`, `ICAIF_PROFILE=profiles/profile99-production.json`,
    `TEAM_ID`, `TEAM_TOKEN`.
-3. **Each round**, about 3 minutes before the deadline (09:07, 10:22, 11:22, … ET):
+3. **Each round**, at the run times above. These are after the last bar the agent uses has closed, and about 17 minutes before the deadline:
 
    ```sh
    export TEAM_ID=... TEAM_TOKEN=...
@@ -152,6 +194,12 @@ python scripts/report.py            # reports/backtest_report.md (+ holdout, eva
    state, which is the last submitted weights drifted by price.
 5. A cron schedule at the 7 run times on trading days is enough to automate it.
    Rounds that the agent holds simply upload nothing.
+6. **News veto trial (Validation only, then decide):** `models/params.json` has `news_veto: true`.
+   With `ANTHROPIC_API_KEY` set, each round sends headlines published before the deadline to Claude Opus 5
+   (on the competition's approved list). The model can only *reduce* positions. Every prompt and response is
+   saved in `private/<round_id>/llm_log.json`, which you need for the LLM disclosure in the final materials.
+   It cannot be backtested honestly (the model knows 2021-25), so judge it on Oct 8–9 and set `news_veto` for Official.
+   Earnings-day trims are implemented but off; see `reports/event_experiment.md`.
 
 ## Known limitations
 

@@ -52,6 +52,7 @@ class Params:
     event_min_move: float = 0.0      # only names whose typical earnings gap >= this (abs log)
     event_trim_round: int = 7        # trim from this round on the day before the jump
     event_restore_round: int = 1     # restore at this round on the jump day ("trim_restore")
+    news_veto: bool = False          # live only: reduce-only LLM news veto (eyris/news.py)
     # alpha.py
     use_alpha: bool = False
     tilt: float = 0.0                # multiplicative tilt strength on risk weights

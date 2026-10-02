@@ -133,3 +133,33 @@ def static_move_fn(path=MOVES_FILE):
     """Live: per-symbol mean |gap| over the full development history."""
     m = pd.read_csv(path).set_index("symbol")["mean_abs_gap"]
     return lambda symbol, jump: float(m.get(symbol, np.inf))
+
+
+def refresh_calendar(cache_dir, today):
+    """Live: merge newly confirmed upcoming dates into the committed calendar (once a day)."""
+    cache_dir = Path(cache_dir)
+    path = cache_dir / f"earnings_{pd.Timestamp(today):%Y-%m-%d}.csv"
+    base = load_calendar()
+    if path.exists():
+        return load_calendar(path)
+    try:
+        import yfinance as yf
+        rows = []
+        for sym in UNIVERSE:
+            d = yf.Ticker(sym).get_earnings_dates(limit=4)
+            for ts in d.index:
+                ts = pd.Timestamp(ts).tz_convert("America/New_York").tz_localize(None)
+                rows.append({"symbol": sym, "announced_at": ts})
+        new = pd.DataFrame(rows)
+        # a re-dated announcement replaces the stale one in the same quarter (+-20 days)
+        keep = []
+        for row in base.itertuples():
+            same = new[(new.symbol == row.symbol) & ((new.announced_at - row.announced_at).abs() < pd.Timedelta(days=20))]
+            if same.empty:
+                keep.append({"symbol": row.symbol, "announced_at": row.announced_at})
+        merged = pd.concat([pd.DataFrame(keep), new]).drop_duplicates(["symbol", "announced_at"])
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        merged.sort_values(["symbol", "announced_at"]).to_csv(path, index=False)
+        return load_calendar(path)
+    except Exception:
+        return base
