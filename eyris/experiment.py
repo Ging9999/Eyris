@@ -46,8 +46,8 @@ class Study:
         return [[m for n, m in w.items() if keep(n)] for w in self.field_window_metrics]
 
     def targets(self, params, model=None):
-        key = (params.risk_method, params.lookback_days, params.stock_cap, params.gross,
-               params.use_alpha, params.tilt, id(model))
+        # every field except the execution ones changes the targets
+        key = (replace(params, lam=1.0, band=0.0, min_trade=0.0), id(model))
         if key not in self._targets:
             self._targets[key] = agent_targets(Agent(params, model), self.p, self.r, self.ks)
         return self._targets[key]

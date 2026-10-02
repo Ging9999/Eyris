@@ -209,3 +209,33 @@ def test_buy_and_hold_turnover_is_initial_allocation_only(synth):
     assert m["turnover"] == pytest.approx(1 / 1.001 / (k1 - k0), rel=1e-9)
     assert res.traded.sum() == 1
     assert len(res.valuations) == 1 + (k1 - k0) + 15 - 1  # init + endpoints + intermediate closes
+
+
+def test_overlay_params_change_targets(synth):
+    _, p, r = synth
+    ks = np.arange(300, len(r), 7)
+    base = agent_targets(Agent(Params(lookback_days=20, gross=0.7)), p, r, ks)
+    for kw in (dict(halflife_days=5.0), dict(gross_mode="voltarget", vol_target=0.02),
+               dict(gross_mode="trend", trend_days=5, trend_floor=0.0), dict(risk_method="hrp")):
+        other = agent_targets(Agent(Params(lookback_days=20, gross=0.7, **kw)), p, r, ks)
+        assert not np.allclose(base, other), kw
+        assert (other.sum(1) <= 0.7 + 1e-9).all() and (other >= 0).all()
+
+
+def test_study_target_cache_distinguishes_all_target_params():
+    from eyris.experiment import Study
+    st = Study.__new__(Study)
+    st._targets = {}
+    calls = []
+    import eyris.experiment as ex
+    orig = ex.agent_targets
+    ex.agent_targets = lambda agent, *a: calls.append(agent.params) or np.zeros(1)
+    try:
+        st.p = st.r = st.ks = None
+        st.targets(Params())
+        st.targets(Params(lam=0.9, band=0.1))          # execution-only change: cached
+        st.targets(Params(halflife_days=5.0))          # target change: recomputed
+        st.targets(Params(gross_mode="trend"))
+    finally:
+        ex.agent_targets = orig
+    assert len(calls) == 3

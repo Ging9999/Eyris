@@ -38,7 +38,14 @@ class Params:
     risk_method: str = "invvol"      # "ew" | "invvol" | "minvar" | "blend"
     lookback_days: int = 30          # bar-return history used for vol / covariance
     stock_cap: float = 0.10          # internal cap, <= MAX_WEIGHT
-    gross: float = 1.0               # stock exposure; 1 - gross stays in cash
+    gross: float = 1.0               # stock exposure (max exposure if gross_mode != "fixed")
+    halflife_days: float = 0.0       # >0: EWMA vol/cov with this half-life (Man AHL style)
+    # exposure overlays, recomputed once per day from completed days
+    gross_mode: str = "fixed"        # "fixed" | "voltarget" | "trend" | "voltarget_trend"
+    vol_target: float = 0.10         # annualized portfolio vol target (voltarget modes)
+    gross_min: float = 0.2           # exposure floor for overlays
+    trend_days: int = 20             # EW-basket return lookback for the trend overlay
+    trend_floor: float = 0.5         # exposure multiplier when the basket trend is negative
     # alpha.py
     use_alpha: bool = False
     tilt: float = 0.0                # multiplicative tilt strength on risk weights
@@ -58,6 +65,14 @@ class Params:
             raise ValueError("lookback_days must be in [2, %d]" % MAX_LOOKBACK_DAYS)
         if not 0 < self.lam <= 1:
             raise ValueError("lam must be in (0, 1]")
+        if self.gross_mode not in ("fixed", "voltarget", "trend", "voltarget_trend"):
+            raise ValueError("unknown gross_mode")
+        if not 0 <= self.gross_min <= self.gross:
+            raise ValueError("gross_min must be in [0, gross]")
+        if not 1 <= self.trend_days <= MAX_LOOKBACK_DAYS:
+            raise ValueError("trend_days must be in [1, %d]" % MAX_LOOKBACK_DAYS)
+        if not 0 <= self.trend_floor <= 1:
+            raise ValueError("trend_floor must be in [0, 1]")
 
     def to_dict(self):
         return asdict(self)

@@ -23,7 +23,9 @@ In practice the agent buys the inverse-vol portfolio and rarely trades after tha
 | Holdout 2025-Q4 (evaluated once) | **6.50** / 24 | 8.00 (cash) | 2.1% | 4.8% |
 
 Full tables, charts and caveats are in [`reports/backtest_report.md`](reports/backtest_report.md).
-The alpha experiment is in [`reports/alpha_experiment.md`](reports/alpha_experiment.md).
+The alpha experiment is in [`reports/alpha_experiment.md`](reports/alpha_experiment.md). Research-backed upgrades (vol targeting,
+trend overlay, HRP, EWMA risk, the overnight effect) were tested and not adopted; see
+[`reports/research_experiment.md`](reports/research_experiment.md).
 
 The trade-off is explicit: over all of 2025 the agent returned +8.6% (Sharpe 1.24, MDD 9.9%) against +19.0% (Sharpe 1.20,
 MDD 20.9%) for equal-weight buy & hold. The competition ranks drawdown and turnover as heavily as return,
@@ -64,7 +66,7 @@ Three consequences shaped the design:
 eyris/
   config.py      universe, official constants, Params
   data.py        load/clean bars, early closes, decision rounds + execution prices
-  risk.py        inverse-vol, Ledoit-Wolf long-only min-variance, capped weights
+  risk.py        inverse-vol, min-variance, HRP, EWMA risk; vol-target / trend exposure overlays
   alpha.py       optional LightGBM cross-sectional ranker + multiplicative tilt
   execution.py   partial rebalancing w += lam*(target - w), no-trade band, sanitize
   agent.py       Agent.decide(bars_until_cutoff, current_weights) -> weights | HOLD

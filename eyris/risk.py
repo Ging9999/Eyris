@@ -1,8 +1,10 @@
 """Risk-based target weights: inverse volatility and long-only minimum variance."""
 import numpy as np
+from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
-from .config import ROUNDS_PER_DAY
+from .config import ANNUALIZATION, ROUNDS_PER_DAY
 
 
 def bar_returns(close, lookback_days):
@@ -46,14 +48,28 @@ def cap_weights(w, total, cap):
     return np.minimum(w, cap)
 
 
-def inverse_vol(returns, total, cap):
-    vol = returns.std(axis=0)
+def ewma_weights(n, halflife_days):
+    """Row weights (oldest first) summing to n; flat when halflife_days <= 0."""
+    if halflife_days <= 0:
+        return np.ones(n)
+    age = np.arange(n)[::-1]
+    w = 0.5 ** (age / (halflife_days * ROUNDS_PER_DAY))
+    return w * n / w.sum()
+
+
+def inverse_vol(returns, total, cap, halflife_days=0.0):
+    w = ewma_weights(len(returns), halflife_days)
+    mu = (w[:, None] * returns).sum(0) / w.sum()
+    vol = np.sqrt((w[:, None] * (returns - mu) ** 2).sum(0) / w.sum())
     vol = np.where(vol > 1e-12, vol, np.nanmedian(vol[vol > 1e-12]) if (vol > 1e-12).any() else 1.0)
     return cap_weights(1.0 / vol, total, cap)
 
 
-def shrunk_cov(returns):
-    cov, _ = ledoit_wolf(returns, assume_centered=False)
+def shrunk_cov(returns, halflife_days=0.0):
+    """Ledoit-Wolf covariance; EWMA via sqrt-weighted rows when halflife_days > 0."""
+    w = ewma_weights(len(returns), halflife_days)
+    mu = (w[:, None] * returns).sum(0) / w.sum()
+    cov, _ = ledoit_wolf((returns - mu) * np.sqrt(w)[:, None], assume_centered=True)
     return cov
 
 
@@ -72,25 +88,79 @@ def min_variance(cov, total, cap, iters=300):
     return w
 
 
+def hrp(cov, total, cap):
+    """Hierarchical Risk Parity (Lopez de Prado, 2016), then capped."""
+    sd = np.sqrt(np.diag(cov))
+    corr = np.clip(cov / np.outer(sd, sd), -1, 1)
+    dist = np.sqrt(np.clip(0.5 * (1 - corr), 0, None))
+    np.fill_diagonal(dist, 0)
+    order = list(leaves_list(linkage(squareform(dist, checks=False), method="single")))
+    w = np.ones(len(sd))
+    stack = [order]
+    while stack:
+        items = stack.pop()
+        if len(items) < 2:
+            continue
+        left, right = items[:len(items) // 2], items[len(items) // 2:]
+        var = []
+        for c in (left, right):
+            sub = cov[np.ix_(c, c)]
+            ivp = 1 / np.diag(sub)
+            ivp /= ivp.sum()
+            var.append(ivp @ sub @ ivp)
+        a = 1 - var[0] / (var[0] + var[1])
+        w[left] *= a
+        w[right] *= 1 - a
+        stack += [left, right]
+    return cap_weights(w, total, cap)
+
+
+def base_weights(r, params, cap):
+    """Shape of the stock book, summing to 1."""
+    m = params.risk_method
+    if m == "ew":
+        return cap_weights(np.ones(r.shape[1]), 1.0, cap)
+    if m == "invvol":
+        return inverse_vol(r, 1.0, cap, params.halflife_days)
+    cov = shrunk_cov(r, params.halflife_days)
+    if m == "minvar":
+        return min_variance(cov, 1.0, cap)
+    if m == "blend":
+        return 0.5 * inverse_vol(r, 1.0, cap, params.halflife_days) + 0.5 * min_variance(cov, 1.0, cap)
+    if m == "hrp":
+        return hrp(cov, 1.0, cap)
+    raise ValueError(m)
+
+
+def exposure(r, close, w, params):
+    """Gross exposure in [gross_min, gross] from the vol-target / trend overlays."""
+    g = params.gross
+    mode = params.gross_mode
+    if mode == "fixed":
+        return g
+    if "voltarget" in mode:
+        vol = np.sqrt(w @ shrunk_cov(r, params.halflife_days) @ w) * ANNUALIZATION
+        g = min(g, params.vol_target / vol) if vol > 0 else g
+    if "trend" in mode:
+        n = params.trend_days * ROUNDS_PER_DAY
+        basket = np.log(close[-1] / close[-1 - n]).mean() if len(close) > n else 0.0
+        if basket <= 0:
+            g *= params.trend_floor
+    return float(np.clip(g, params.gross_min, params.gross))
+
+
 def risk_weights(close, params):
     """Risk target from a close-price history (bars <= info cutoff).
 
-    Returns weights summing to ``params.gross`` with each <= ``params.stock_cap``.
+    Returns weights summing to the exposure (``params.gross`` when fixed), each
+    <= ``params.stock_cap``.
     """
     n = close.shape[1]
-    total, cap = params.gross, params.stock_cap
-    if total <= 0:
+    cap = params.stock_cap
+    if params.gross <= 0:
         return np.zeros(n)
-    if params.risk_method == "ew":
-        return cap_weights(np.ones(n), total, cap)
     r = bar_returns(close, params.lookback_days)
     if r.shape[0] < 2 * n:
-        return cap_weights(np.ones(n), total, cap)
-    if params.risk_method == "invvol":
-        return inverse_vol(r, total, cap)
-    cov = shrunk_cov(r)
-    if params.risk_method == "minvar":
-        return min_variance(cov, total, cap)
-    if params.risk_method == "blend":
-        return 0.5 * inverse_vol(r, total, cap) + 0.5 * min_variance(cov, total, cap)
-    raise ValueError(params.risk_method)
+        return cap_weights(np.ones(n), params.gross, cap)
+    w = base_weights(r, params, cap)
+    return cap_weights(w, exposure(r, close, w, params), cap)
