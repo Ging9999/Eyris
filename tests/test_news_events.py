@@ -96,3 +96,45 @@ def test_agent_decide_applies_trims(synth):
     tgt = agent.decide(head, np.zeros(N_ASSETS)).weights
     d = agent.decide(head, tgt, trim={0: 1.0})
     assert not d.hold and d.weights[0] == 0 and (d.weights <= tgt + 1e-9).all()
+
+
+# --------------------------------------------------------------------------- VIX sentiment overlay
+def _vix_frame():
+    import pandas as pd
+    idx = pd.bdate_range("2026-06-01", "2026-10-09")
+    v = pd.DataFrame({"vix": 15.0, "vix3m": 17.0}, index=idx)
+    v.loc["2026-10-07", "vix"] = 30.0          # fear on the 7th's close
+    return v
+
+
+def test_vix_signal_uses_only_closes_before_the_day():
+    import pandas as pd
+    from eyris import sentiment
+    from eyris.config import Params
+    q = Params(gross=0.5, vix_mode="level", vix_threshold=25, vix_boost=1.4)
+    v = _vix_frame()
+    assert sentiment.multiplier(v, "2026-10-07", q) == 1.0   # its own close is not known yet
+    assert sentiment.multiplier(v, "2026-10-08", q) == 1.4   # known the next morning
+    # same answer whether or not the feed already has a (partial) row for the day
+    assert sentiment.multiplier(v[v.index < "2026-10-08"], "2026-10-08", q) == 1.4
+    # corrupting the day itself and later days changes nothing
+    bad = v.copy()
+    bad.loc[bad.index >= "2026-10-08", "vix"] = 99.0
+    assert sentiment.multiplier(bad, "2026-10-08", q) == 1.4
+    assert sentiment.multiplier(v, "2026-10-08", Params()) == 1.0           # off by default
+
+
+def test_vix_overlay_scales_target_and_fails_safe(tmp_path, monkeypatch):
+    import pytest
+    from eyris import live
+    from eyris.config import Params
+    monkeypatch.setattr(live, "SNAPSHOTS", tmp_path)
+    q = Params(gross=0.5, vix_mode="level", vix_threshold=25, vix_boost=1.4)
+    m, info = live.vix_multiplier(q, "official-2026-10-08-r1", fetch=_vix_frame)
+    assert m == 1.4 and info["vix_prev_close"] == 30.0
+    def boom():
+        raise RuntimeError("network down")
+    m, info = live.vix_multiplier(q, "official-2026-10-08-r1", fetch=boom)
+    assert m == 1.0 and "vix_error" in info
+    with pytest.raises(ValueError):
+        Params(gross=0.8, vix_mode="level", vix_boost=1.4)          # 0.8 x 1.4 > 100%

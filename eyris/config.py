@@ -11,6 +11,8 @@ UNIVERSE = (
     "GOOGL", "META", "DIS", "T", "NEE",
 )
 N_ASSETS = len(UNIVERSE)
+# Organizer sectors (universe.json): the universe is ordered in blocks of five.
+SECTORS = tuple(tuple(range(i, i + 5)) for i in range(0, N_ASSETS, 5))
 
 # Official rules (Codabench competition 99 + starter kit docs/rules.md).
 INITIAL_NAV = 1_000_000.0
@@ -35,11 +37,13 @@ MAX_LOOKBACK_DAYS = 40
 @dataclass(frozen=True)
 class Params:
     # risk.py
-    risk_method: str = "invvol"      # "ew" | "invvol" | "minvar" | "blend"
+    risk_method: str = "invvol"      # "ew" | "invvol" | "minvar" | "blend" | "hrp" | "erc" | "sector_eq" | "sector_invvol"
     lookback_days: int = 30          # bar-return history used for vol / covariance
     stock_cap: float = 0.10          # internal cap, <= MAX_WEIGHT
     gross: float = 1.0               # stock exposure (max exposure if gross_mode != "fixed")
     halflife_days: float = 0.0       # >0: EWMA vol/cov with this half-life (Man AHL style)
+    vol_power: float = 1.0           # invvol weights ~ vol**-vol_power (2 = inverse variance)
+    top_k: int = 0                   # >0: hold only the top_k lowest-vol names
     # exposure overlays, recomputed once per day from completed days
     gross_mode: str = "fixed"        # "fixed" | "voltarget" | "trend" | "voltarget_trend"
     vol_target: float = 0.10         # annualized portfolio vol target (voltarget modes)
@@ -53,9 +57,17 @@ class Params:
     event_trim_round: int = 7        # trim from this round on the day before the jump
     event_restore_round: int = 1     # restore at this round on the jump day ("trim_restore")
     news_veto: bool = False          # live only: reduce-only LLM news veto (eyris/news.py)
+    # sentiment.py: contrarian VIX overlay (scale gross by vix_boost when fear is high)
+    vix_mode: str = "off"            # "off" | "level" (VIX > threshold) | "z" (60-day z-score > threshold)
+    vix_threshold: float = 25.0
+    vix_boost: float = 1.4
     # alpha.py
     use_alpha: bool = False
     tilt: float = 0.0                # multiplicative tilt strength on risk weights
+    # agent.py: bad-data circuit breaker. HOLD if the risk target moved more than this
+    # since the previous completed day (2021-25 max: 0.038 L1, 0.016 per name). 0 disables.
+    breaker_l1: float = 0.08
+    breaker_name: float = 0.03
     # execution.py
     lam: float = 0.5                 # partial-rebalance speed
     band: float = 0.05               # skip the round if L1(target - current) < band
@@ -83,6 +95,14 @@ class Params:
         if not 0 <= self.event_cut <= 1 or not 1 <= self.event_trim_round <= 7 \
                 or not 1 <= self.event_restore_round <= 7:
             raise ValueError("bad event parameters")
+        if not 0 < self.vol_power <= 4:
+            raise ValueError("vol_power must be in (0, 4]")
+        if not 0 <= self.top_k <= N_ASSETS or (self.top_k and self.gross > self.stock_cap * self.top_k + 1e-12):
+            raise ValueError("top_k must be 0 or reach gross under stock_cap")
+        if self.vix_mode not in ("off", "level", "z"):
+            raise ValueError("unknown vix_mode")
+        if not 0.5 <= self.vix_boost <= 2 or (self.vix_mode != "off" and self.gross * self.vix_boost > 1 + 1e-12):
+            raise ValueError("vix_boost must be in [0.5, 2] and keep gross * boost <= 1")
         if not 0 <= self.trend_floor <= 1:
             raise ValueError("trend_floor must be in [0, 1]")
 

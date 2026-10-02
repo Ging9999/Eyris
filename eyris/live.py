@@ -91,8 +91,8 @@ def load_params():
     return Params()
 
 
-def load_agent():
-    params = load_params()
+def load_agent(params=None):
+    params = params or load_params()
     model = AlphaModel.load(MODEL_FILE) if params.use_alpha and MODEL_FILE.exists() else None
     if params.use_alpha and model is None:
         params = Params(**{**params.to_dict(), "use_alpha": False, "tilt": 0.0})
@@ -167,22 +167,72 @@ def weights_from_state(prices):
     return grown / (1.0 - w.sum() + grown.sum())
 
 
-def save_state(decision: Decision, prices, round_id):
+def save_state(log):
+    """Record submitted weights. Call only after a confirmed upload, never on decide/dry-run."""
     PRIVATE.mkdir(exist_ok=True)
-    st = {"round_id": round_id, "weights": decision.as_dict(),
-          "prices": {s: float(x) for s, x in zip(UNIVERSE, prices)}}
+    st = {"round_id": log["round_id"], "weights": log["weights"], "prices": log["prices"]}
     (PRIVATE / "state.json").write_text(json.dumps(st, indent=1))
 
 
 # --------------------------------------------------------------------------- decision
-def decide_round(bars_grid, current_weights, agent=None, trim=None, restore=None):
+def decide_round(bars_grid, current_weights, agent=None, trim=None, restore=None, gross_mult=1.0,
+                 reference=None):
     """Pure decision from a completed-bar snapshot (+ event flags). Never raises."""
     agent = agent or load_agent()
     try:
         panels = build_panels(bars_grid)
     except Exception as e:
         return Decision(None, reason=f"error: bad snapshot: {e}")
-    return agent.decide(panels, current_weights, trim=trim, restore=restore)
+    return agent.decide(panels, current_weights, trim=trim, restore=restore, gross_mult=gross_mult,
+                        reference=reference)
+
+
+def previous_base_target(round_id, max_age_days=5):
+    """Base target logged by the latest earlier round, any phase (None if none recent).
+
+    The base target does not depend on holdings, so Validation's last round is a
+    valid reference for the first Official round."""
+    deadline = deadline_of(round_id)
+    best = None
+    for d in PRIVATE.glob("*-*-r*"):
+        f = d / "decision_log.json"
+        if d.name == round_id or not f.exists():
+            continue
+        try:
+            dl = deadline_of(d.name)
+            base = json.loads(f.read_text()).get("base_target")
+        except Exception:
+            continue
+        if base and dl < deadline and (deadline - dl).days <= max_age_days and (best is None or dl > best[0]):
+            best = (dl, d.name, base)
+    return (best[1], best[2]) if best else (None, None)
+
+
+def fetch_vix(days=200):
+    """Daily VIX and VIX3M closes from Yahoo Finance (columns vix, vix3m)."""
+    import yfinance as yf
+    df = yf.download(["^VIX", "^VIX3M"], period=f"{days}d", interval="1d", auto_adjust=False,
+                     progress=False)["Close"]
+    df = df.rename(columns={"^VIX": "vix", "^VIX3M": "vix3m"})[["vix", "vix3m"]]
+    df.index = pd.DatetimeIndex(df.index).tz_localize(None)
+    return df
+
+
+def vix_multiplier(params, round_id, fetch=fetch_vix):
+    """Contrarian VIX overlay for one round: (multiplier, log info). Failure -> 1.0."""
+    from . import sentiment
+    if params.vix_mode == "off":
+        return 1.0, {}
+    day = round_id.split("-", 1)[1].rsplit("-r", 1)[0]
+    try:
+        vix = fetch()
+        SNAPSHOTS.mkdir(parents=True, exist_ok=True)
+        vix.to_csv(SNAPSHOTS / f"{round_id}_vix.csv")
+        sig = sentiment.signals(vix, [pd.Timestamp(day)]).iloc[0]
+        m = sentiment.multiplier(vix, day, params)
+        return m, {"vix_prev_close": float(sig.vix), "vix_z": float(sig.z), "vix_multiplier": m}
+    except Exception as e:
+        return 1.0, {"vix_error": f"{type(e).__name__}: {e}", "vix_multiplier": 1.0}
 
 
 def round_flags(params, round_id, deadline, history_days, out_dir):
@@ -237,7 +287,9 @@ def _shape(x, depth=0):
 
 
 def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_round=None):
-    """Fetch (or load) bars, decide, write private/<round_id>/decision.json if trading."""
+    """Fetch (or load) bars, decide, write private/<round_id>/decision.json if trading.
+
+    Does not touch private/state.json: the caller saves state only after a confirmed upload."""
     as_of = as_of or min(datetime.now(ET), deadline_of(round_id))
     out_dir = PRIVATE / round_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -247,7 +299,8 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_ro
         snap_path = SNAPSHOTS / f"{round_id}_30m.parquet"
         df30.to_parquet(snap_path)
     else:
-        df30 = pd.read_parquet(snapshot)
+        snap_path = Path(snapshot)
+        df30 = pd.read_parquet(snap_path)
     grid = resample_to_grid(df30, as_of)
     last = grid.sort_values("timestamp_et").groupby("ticker").last()
     prices = last.reindex(list(UNIVERSE))["close"].to_numpy(dtype=float)
@@ -260,7 +313,7 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_ro
         first_round = round_id in ("validation-2026-10-08-r1", "official-2026-10-12-r1")
     if cur is None and first_round:
         cur, source = np.zeros(N_ASSETS), "assumed_initial_cash"
-    flag_info = {}
+    flag_info, inputs = {}, None
     if cur is None:
         source = "none"
         decision = Decision(None, reason="unknown current holdings")
@@ -268,19 +321,95 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_ro
         agent = load_agent()
         days = pd.DatetimeIndex(grid["timestamp_et"].dt.normalize().unique()).sort_values()
         trim, restore, flag_info = round_flags(agent.params, round_id, deadline_of(round_id), days, out_dir)
-        decision = decide_round(grid, cur, agent, trim, restore)
+        mult, vix_info = vix_multiplier(agent.params, round_id)
+        flag_info.update(vix_info)
+        ref_round, ref = previous_base_target(round_id)
+        decision = decide_round(grid, cur, agent, trim, restore, gross_mult=mult, reference=ref)
+        # Everything the pure decision depended on, so `replay` can reproduce it exactly.
+        inputs = {"snapshot": _rel(snap_path), "snapshot_sha256": _sha256(snap_path),
+                  "as_of": pd.Timestamp(as_of).isoformat(), "current_weights": [float(x) for x in cur],
+                  "trim": {str(i): float(c) for i, c in (trim or {}).items()},
+                  "restore": sorted(int(i) for i in (restore or set())), "gross_mult": float(mult),
+                  "reference_round": ref_round, "reference_target": ref, "params": agent.params.to_dict()}
     log = {"round_id": round_id, "as_of": str(as_of), "holdings_source": source,
            "portfolio_shape": _shape(portfolio), **flag_info,
            "last_bar": str(grid["timestamp_et"].max()), "hold": decision.hold, "reason": decision.reason,
            "target": None if decision.target is None else dict(zip(UNIVERSE, map(float, decision.target))),
-           "weights": decision.as_dict()}
+           "weights": decision.as_dict(),
+           "prices": {s: float(x) for s, x in zip(UNIVERSE, prices)},
+           "breaker": bool(decision.info.get("breaker", False)),
+           "base_target": decision.info.get("base_target"), "inputs": inputs}
     (out_dir / "decision_log.json").write_text(json.dumps(log, indent=1))
-    if decision.hold:
-        return None, log
     path = out_dir / "decision.json"
+    if decision.hold:
+        path.unlink(missing_ok=True)  # never leave a stale decision from an earlier run
+        return None, log
     path.write_text(json.dumps(decision_payload(decision, phase, round_id), indent=2))
-    save_state(decision, prices, round_id)
     return path, log
+
+
+def _rel(path):
+    path = Path(path).resolve()
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _sha256(path):
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def replay_round(round_dir):
+    """Re-run one logged decision from its saved inputs; report whether it matches exactly.
+
+    Checks: the saved bar snapshot is unchanged (sha256), the recomputed decision
+    (hold / weights) equals the logged one, and equals the decision.json on disk.
+    """
+    round_dir = Path(round_dir)
+    log = json.loads((round_dir / "decision_log.json").read_text())
+    out = {"round_id": log["round_id"], "logged_hold": log["hold"]}
+    inp = log.get("inputs")
+    if inp is None:
+        out["status"] = "NO_INPUTS" if log.get("holdings_source") != "none" else "OK_NO_DECISION"
+        return out
+    snap = Path(inp["snapshot"])
+    snap = snap if snap.is_absolute() else ROOT / snap
+    if not snap.exists():
+        return {**out, "status": "MISSING_SNAPSHOT", "snapshot": inp["snapshot"]}
+    if _sha256(snap) != inp["snapshot_sha256"]:
+        return {**out, "status": "SNAPSHOT_CHANGED", "snapshot": inp["snapshot"]}
+    grid = resample_to_grid(pd.read_parquet(snap), pd.Timestamp(inp["as_of"]))
+    agent = load_agent(Params(**inp["params"]))
+    decision = decide_round(grid, np.array(inp["current_weights"]), agent,
+                            {int(i): c for i, c in inp["trim"].items()}, set(inp["restore"]),
+                            gross_mult=inp["gross_mult"], reference=inp.get("reference_target"))
+    out["replayed_hold"] = decision.hold
+    problems = []
+    if decision.hold != log["hold"]:
+        problems.append("hold differs")
+    elif not decision.hold:
+        new = np.array([decision.as_dict()[s] for s in UNIVERSE])
+        logged = np.array([log["weights"][s] for s in UNIVERSE])
+        out["max_diff_vs_log"] = float(np.abs(new - logged).max())
+        if out["max_diff_vs_log"] > 1e-12:
+            problems.append("weights differ from log")
+        path = round_dir / "decision.json"
+        if path.exists():
+            sub = json.loads(path.read_text())["weights"]
+            out["max_diff_vs_file"] = float(np.abs(new - np.array([sub[s] for s in UNIVERSE])).max())
+            if out["max_diff_vs_file"] > 1e-9:
+                problems.append("weights differ from decision.json")
+    out["status"] = "MISMATCH: " + "; ".join(problems) if problems else "MATCH"
+    return out
+
+
+def replay_all(round_ids=None):
+    dirs = sorted(d for d in PRIVATE.glob("*-r*") if (d / "decision_log.json").exists())
+    if round_ids:
+        dirs = [d for d in dirs if d.name in set(round_ids)]
+    return [replay_round(d) for d in dirs]
 
 
 # --------------------------------------------------------------------------- CLI
@@ -331,49 +460,81 @@ def main(argv=None):
     run = sub.add_parser("run", help="decide and upload the currently open round via the kit")
     run.add_argument("--phase", choices=["validation", "official"], help="only act in this phase")
     run.add_argument("--dry-run", action="store_true", help="decide but never upload")
+    rp = sub.add_parser("replay", help="re-run logged decisions from saved inputs and verify they match")
+    rp.add_argument("round_ids", nargs="*", help="rounds to replay (default: all in private/)")
     a = ap.parse_args(argv)
+    if a.cmd == "replay":
+        results = replay_all(a.round_ids)
+        for r in results:
+            print(json.dumps(r))
+        bad = [r for r in results if not r["status"].startswith(("MATCH", "OK_"))]
+        (PRIVATE / "replay_report.json").write_text(json.dumps(results, indent=1))
+        print(f"{len(results) - len(bad)}/{len(results)} rounds reproduced exactly"
+              + (f"; problems: {[r['round_id'] for r in bad]}" if bad else ""))
+        return 1 if bad else 0
     if a.cmd == "decide":
         as_of = datetime.fromisoformat(a.as_of) if a.as_of else None
         path, log = prepare(a.phase, a.round_id, as_of=as_of, snapshot=a.snapshot)
         print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source", "last_bar")}))
         print(path or "HOLD: nothing to upload this round")
         return 0
+    return run_round(a)
+
+
+def run_round(a):
+    """`run`: decide and upload the open round, then send an alert (eyris/alerts.py)."""
+    from . import alerts
     sched = public_schedule()
     row = open_round(sched)
     if row is None or (a.phase and row["phase"] != a.phase):
         print(json.dumps({"status": "NO_OPEN_ROUND", "server_time": sched.get("current_time"),
                           "next_deadline": sched.get("next_deadline")}))
         return 0
-    phase = row["phase"]
-    first = min((r for r in sched["rounds"] if r["phase"] == phase and r.get("status") != "CANCELLED"),
-                key=lambda r: r["opens_at"])["id"] == row["id"]
-    have_creds = all(os.environ.get(k) for k in ("CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"))
-    if not have_creds and not a.dry_run:
-        print(json.dumps({"status": "MISSING_CREDENTIALS", "round_id": row["id"],
-                          "need": ["CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"]}))
-        return 2
-    if a.dry_run and not have_creds:
-        path, log = prepare(phase, row["id"], first_round=first)
-        print(json.dumps({"status": "DRY_RUN", **{k: log[k] for k in ("round_id", "hold", "reason",
-                                                                      "holdings_source", "last_bar")}}))
-        return 0
-    with _kit_session() as client:
-        own = client.round(row["id"])
-        if client._occupied(own):
-            print(json.dumps({"status": "SLOT_ALREADY_USED", "round_id": row["id"]}))
+    rid = row["id"]
+    status, log, receipt = "ERROR", None, None
+    try:
+        phase = row["phase"]
+        first = min((r for r in sched["rounds"] if r["phase"] == phase and r.get("status") != "CANCELLED"),
+                    key=lambda r: r["opens_at"])["id"] == rid
+        have_creds = all(os.environ.get(k) for k in ("CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"))
+        if not have_creds and not a.dry_run:
+            status = "MISSING_CREDENTIALS"
+            print(json.dumps({"status": status, "round_id": rid, "need": ["CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"]}))
+            return 2
+        if a.dry_run and not have_creds:
+            path, log = prepare(phase, rid, first_round=first)
+            status = "DRY_RUN"
+            print(json.dumps({"status": status, **{k: log[k] for k in ("round_id", "hold", "reason",
+                                                                       "holdings_source", "last_bar")}}))
             return 0
-        portfolio = client.portfolio(phase)
-        path, log = prepare(phase, row["id"], portfolio=portfolio, first_round=first)
-        print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source",
-                                              "last_bar", "portfolio_shape")}))
-        if path is None:
-            print(json.dumps({"status": "HOLD_NO_UPLOAD", "round_id": row["id"]}))
-        elif a.dry_run:
-            print(json.dumps({"status": "DRY_RUN", "decision": str(path)}))
-        else:
-            receipt = client.decision(str(path))
-            print(json.dumps({"status": "UPLOADED", "receipt": receipt}, default=str))
-    return 0
+        with _kit_session() as client:
+            own = client.round(rid)
+            if client._occupied(own):
+                status = "SLOT_ALREADY_USED"
+                print(json.dumps({"status": status, "round_id": rid}))
+                return 0
+            portfolio = client.portfolio(phase)
+            path, log = prepare(phase, rid, portfolio=portfolio, first_round=first)
+            print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source",
+                                                  "last_bar", "portfolio_shape")}))
+            if path is None:
+                status = "HOLD_NO_UPLOAD"
+                print(json.dumps({"status": status, "round_id": rid}))
+            elif a.dry_run:
+                status = "DRY_RUN"
+                print(json.dumps({"status": status, "decision": str(path)}))
+            else:
+                receipt = client.decision(str(path))
+                save_state(log)
+                status = "UPLOADED"
+                print(json.dumps({"status": status, "receipt": receipt}, default=str))
+        return 0
+    except Exception as e:
+        status = f"ERROR {type(e).__name__}: {str(e)[:200]}"
+        raise
+    finally:
+        if status != "DRY_RUN":
+            alerts.notify(*alerts.round_summary(status, rid, log, receipt))
 
 
 if __name__ == "__main__":

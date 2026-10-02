@@ -120,6 +120,8 @@ python -m pytest -q
 | `TEAM_ID`, `TEAM_TOKEN` | uploading decisions | the private receipt from registering (shown once) |
 | `ANTHROPIC_API_KEY` | optional news veto | console.anthropic.com; without it the veto is skipped |
 | `SEC_USER_AGENT` | optional SEC 8-K feed | `"Your Name you@example.com"` (SEC requires a contact); without it only Yahoo headlines are used |
+| `NTFY_TOPIC` | optional phone alert after every round | install the ntfy app and subscribe to a long random topic name (topics are public by name) |
+| `DISCORD_WEBHOOK_URL` | optional Discord alert after every round | channel settings > Integrations > Webhooks |
 
 **Each round** (or schedule it with cron on macOS/Linux, or Task Scheduler on Windows):
 run `bash scripts/cloud_round.sh` (macOS/Linux) or `python -m eyris.live run` (Windows) at **08:50 ET**
@@ -133,6 +135,21 @@ Example crontab (machine clock in ET):
 ```
 
 Keep the computer awake and online during market hours. If a run is missed, the portfolio is simply held for that round.
+
+**Alerts.** With `NTFY_TOPIC` and/or `DISCORD_WEBHOOK_URL` set, every `run` inside an open round sends a short message:
+the outcome, reason, holdings source and receipt status (never weights or tokens). It is marked urgent on an error,
+missing credentials, a circuit-breaker hold, holdings not read from the organizer API, or an unexpected receipt status.
+
+**Circuit breaker.** The agent holds instead of trading when the target moves more than 0.08 (L1), or 0.03 in one stock,
+from the previous round's logged target (an independent download), or from yesterday's target when there is no recent log.
+In 2021-25 the target never moved more than 0.052 in three days, so it only fires on bad data. The log says
+`"breaker": true`; check the snapshot before the next round.
+
+**Replay (reproducibility).** Each `decision_log.json` records every input of the pure decision: the snapshot path and
+sha256, `as_of`, current weights, event and news trims, the VIX multiplier, the breaker reference and the params.
+`python -m eyris.live replay [round_id ...]` re-runs every logged round from those inputs and checks that the result
+matches the log and `decision.json` exactly. It writes `private/replay_report.json` and exits 1 on any mismatch.
+Run it before submitting the final materials, and keep `data/live/` and `private/` (including `llm_cache/`) for the review.
 
 ## Test
 

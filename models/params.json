@@ -9,8 +9,13 @@
   "lam": 0.25,
   "band": 0.05,
   "min_trade": 0.002,
-  "news_veto": true
+  "news_veto": true,
+  "vix_mode": "off",
+  "vix_threshold": 25.0,
+  "vix_boost": 1.4,
+  "breaker_l1": 0.08,
+  "breaker_name": 0.03
  },
  "model": null,
- "note": "Baseline selected by scripts/tune.py. news_veto=true is a TRIAL for Live Validation (Oct 8-9): reduce-only, only active when ANTHROPIC_API_KEY is set, logged to private/<round>/llm_log.json. Decide on/off for Official after Oct 9. Earnings trims are off (see reports/event_experiment.md)."
+ "note": "Baseline selected by scripts/tune.py. news_veto=true is a TRIAL for Live Validation (Oct 8-9): reduce-only, only active when ANTHROPIC_API_KEY is set, logged to private/<round>/llm_log.json. Decide on/off for Official after Oct 9. Earnings trims are off (see reports/event_experiment.md). VIX contrarian overlay is built but off (reports/sentiment_experiment.md); enable with vix_mode='level'."
 }
