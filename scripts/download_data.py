@@ -14,7 +14,7 @@ KIT_REPO = "https://github.com/DeepIntoStreams/2026ICAIF_Trading_Agent_Competiti
 
 
 def main():
-    if not DEFAULT_PARQUET.exists():
+    if "--kit-only" not in sys.argv and not DEFAULT_PARQUET.exists():
         print(f"downloading {DATA_URL}")
         with urllib.request.urlopen(DATA_URL, timeout=120) as resp:
             zipfile.ZipFile(io.BytesIO(resp.read())).extractall(DEFAULT_PARQUET.parent)

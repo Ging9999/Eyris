@@ -199,7 +199,18 @@ def deadline_of(round_id):
     return datetime.fromisoformat(day).replace(hour=int(hh), minute=int(mm), tzinfo=ET)
 
 
-def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None):
+def _shape(x, depth=0):
+    """Keys/types of an API response without any values (safe to log)."""
+    if depth > 3:
+        return "..."
+    if isinstance(x, dict):
+        return {k: _shape(v, depth + 1) for k, v in list(x.items())[:40]}
+    if isinstance(x, list):
+        return [_shape(x[0], depth + 1)] if x else []
+    return type(x).__name__
+
+
+def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_round=None):
     """Fetch (or load) bars, decide, write private/<round_id>/decision.json if trading."""
     as_of = as_of or min(datetime.now(ET), deadline_of(round_id))
     out_dir = PRIVATE / round_id
@@ -218,13 +229,18 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None):
     source = "portfolio_api"
     if cur is None:
         cur, source = weights_from_state(prices), "local_state"
-    if cur is None and round_id.endswith("r1") and not (PRIVATE / "state.json").exists():
+    # Only the phase's very first round may assume the USD 1M starting cash.
+    if first_round is None:
+        first_round = round_id in ("validation-2026-10-08-r1", "official-2026-10-12-r1")
+    if cur is None and first_round:
         cur, source = np.zeros(N_ASSETS), "assumed_initial_cash"
     if cur is None:
+        source = "none"
         decision = Decision(None, reason="unknown current holdings")
     else:
         decision = decide_round(grid, cur)
     log = {"round_id": round_id, "as_of": str(as_of), "holdings_source": source,
+           "portfolio_shape": _shape(portfolio),
            "last_bar": str(grid["timestamp_et"].max()), "hold": decision.hold, "reason": decision.reason,
            "target": None if decision.target is None else dict(zip(UNIVERSE, map(float, decision.target))),
            "weights": decision.as_dict()}
@@ -238,16 +254,40 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None):
 
 
 # --------------------------------------------------------------------------- CLI
+SCHEDULE_URL = "https://hackathon2.deepintomlf.ai/extensions/icaif2026/99/backend/api/v1/schedule"
+
+
+def public_schedule():
+    """Organizer schedule (public endpoint, no credentials)."""
+    import urllib.request
+    with urllib.request.urlopen(SCHEDULE_URL, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
+def open_round(schedule):
+    """The round whose window is open at the organizer's clock, else None."""
+    now = pd.Timestamp(schedule["current_time"])
+    for row in schedule["rounds"]:
+        if row.get("status") != "CANCELLED" and \
+                pd.Timestamp(row["opens_at"]) <= now < pd.Timestamp(row["deadline"]):
+            return row
+    return None
+
+
 def _kit_session():
     kit = Path(os.environ.get("ICAIF_KIT", ROOT / "starter-kit"))
     sys.path.insert(0, str(kit))
     os.chdir(kit)
+    os.environ.setdefault("ICAIF_PROFILE", str(kit / "profiles" / "profile99-production.json"))
     from kit.config import load_environment
     from kit.original_client import OriginalSession, load_profile
     load_environment()
-    return OriginalSession(profile=load_profile(os.environ["ICAIF_PROFILE"]),
-                           token=os.environ["CODABENCH_TOKEN"],
-                           checkpoint=".icaif/checkpoint.json", credentials=".icaif/credentials.json")
+    session = OriginalSession(profile=load_profile(os.environ["ICAIF_PROFILE"]),
+                              token=os.environ["CODABENCH_TOKEN"],
+                              checkpoint=".icaif/checkpoint.json", credentials=".icaif/credentials.json")
+    if session.creds is None:  # fresh container: import organizer-issued credentials from env
+        session.save_credentials(os.environ["TEAM_ID"], os.environ["TEAM_TOKEN"])
+    return session
 
 
 def main(argv=None):
@@ -259,27 +299,52 @@ def main(argv=None):
     d.add_argument("--snapshot", help="use a saved 30m parquet instead of fetching")
     d.add_argument("--as-of", help="ISO time; defaults to now (capped at the deadline)")
     run = sub.add_parser("run", help="decide and upload the currently open round via the kit")
-    run.add_argument("--phase", required=True, choices=["validation", "official"])
-    run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--phase", choices=["validation", "official"], help="only act in this phase")
+    run.add_argument("--dry-run", action="store_true", help="decide but never upload")
     a = ap.parse_args(argv)
     if a.cmd == "decide":
         as_of = datetime.fromisoformat(a.as_of) if a.as_of else None
         path, log = prepare(a.phase, a.round_id, as_of=as_of, snapshot=a.snapshot)
         print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source", "last_bar")}))
         print(path or "HOLD: nothing to upload this round")
-        return
+        return 0
+    sched = public_schedule()
+    row = open_round(sched)
+    if row is None or (a.phase and row["phase"] != a.phase):
+        print(json.dumps({"status": "NO_OPEN_ROUND", "server_time": sched.get("current_time"),
+                          "next_deadline": sched.get("next_deadline")}))
+        return 0
+    phase = row["phase"]
+    first = min((r for r in sched["rounds"] if r["phase"] == phase and r.get("status") != "CANCELLED"),
+                key=lambda r: r["opens_at"])["id"] == row["id"]
+    have_creds = all(os.environ.get(k) for k in ("CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"))
+    if not have_creds and not a.dry_run:
+        print(json.dumps({"status": "MISSING_CREDENTIALS", "round_id": row["id"],
+                          "need": ["CODABENCH_TOKEN", "TEAM_ID", "TEAM_TOKEN"]}))
+        return 2
+    if a.dry_run and not have_creds:
+        path, log = prepare(phase, row["id"], first_round=first)
+        print(json.dumps({"status": "DRY_RUN", **{k: log[k] for k in ("round_id", "hold", "reason",
+                                                                      "holdings_source", "last_bar")}}))
+        return 0
     with _kit_session() as client:
-        sched = client.schedule()
-        row = sched.get("current_round")
-        if not row or row.get("phase") != a.phase:
-            print(json.dumps({"status": "NO_OPEN_ROUND", "next_deadline": sched.get("next_deadline")}))
-            return
-        portfolio = client.portfolio(a.phase)
-        path, log = prepare(a.phase, row["id"], portfolio=portfolio)
-        print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source")}))
-        if path and not a.dry_run:
-            print(json.dumps(client.decision(str(path))))
+        own = client.round(row["id"])
+        if client._occupied(own):
+            print(json.dumps({"status": "SLOT_ALREADY_USED", "round_id": row["id"]}))
+            return 0
+        portfolio = client.portfolio(phase)
+        path, log = prepare(phase, row["id"], portfolio=portfolio, first_round=first)
+        print(json.dumps({k: log[k] for k in ("round_id", "hold", "reason", "holdings_source",
+                                              "last_bar", "portfolio_shape")}))
+        if path is None:
+            print(json.dumps({"status": "HOLD_NO_UPLOAD", "round_id": row["id"]}))
+        elif a.dry_run:
+            print(json.dumps({"status": "DRY_RUN", "decision": str(path)}))
+        else:
+            receipt = client.decision(str(path))
+            print(json.dumps({"status": "UPLOADED", "receipt": receipt}, default=str))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
