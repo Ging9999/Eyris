@@ -46,3 +46,22 @@ def rebalance(w_old, target, lam, band, min_trade=0.0):
     if not delta.any():
         return HOLD
     return sanitize(w_old + delta)
+
+
+def apply_events(w_cur, w_reb, target, trim, restore, min_trade=0.0):
+    """Overlay event trims/restores on a rebalance result (or on HOLD).
+
+    trim: {asset: cut} caps w_i at target_i * (1 - cut) (reduce-only);
+    restore: {asset} sets w_i back to target_i. Trims win over restores.
+    """
+    if not trim and not restore:
+        return w_reb
+    w_cur = np.asarray(w_cur, dtype=float)
+    w = (w_cur if w_reb is HOLD else np.asarray(w_reb, dtype=float)).copy()
+    for i in restore:
+        w[i] = target[i]
+    for i, cut in trim.items():
+        w[i] = min(w[i], target[i] * (1.0 - cut))
+    if w_reb is HOLD and np.abs(w - w_cur).max() < max(min_trade, 1e-9):
+        return HOLD
+    return sanitize(w)

@@ -11,7 +11,7 @@ import numpy as np
 from . import alpha, risk
 from .config import N_ASSETS, UNIVERSE, Params
 from .data import EARLY_CLOSE_DAYS, EARLY_CLOSE_LAST_SLOT, Panels
-from .execution import HOLD, rebalance, sanitize
+from .execution import HOLD, apply_events, rebalance, sanitize
 
 
 @dataclass
@@ -71,8 +71,12 @@ class Agent:
             w = alpha.tilt(w, scores, self.params.tilt, self.params.stock_cap)
         return w
 
-    def decide(self, p: Panels, current_weights) -> Decision:
-        """``p`` must contain only bars completed before the submission deadline."""
+    def decide(self, p: Panels, current_weights, trim=None, restore=None) -> Decision:
+        """``p`` must contain only bars completed before the submission deadline.
+
+        trim / restore: event flags for this round ({asset: cut}, {asset}), from
+        events.EventSchedule and/or the reduce-only news veto.
+        """
         try:
             cur = np.asarray(current_weights, dtype=float)
             if cur.shape != (N_ASSETS,) or not np.isfinite(cur).all():
@@ -84,8 +88,11 @@ class Agent:
                 return Decision(HOLD, reason="non-finite target")
             tgt = sanitize(tgt)
             w = rebalance(cur, tgt, self.params.lam, self.params.band, self.params.min_trade)
+            w = apply_events(cur, w, tgt, trim or {}, restore or set(), self.params.min_trade)
             if w is HOLD:
                 return Decision(HOLD, tgt, reason="inside no-trade band")
-            return Decision(w, tgt, reason="rebalance")
+            reason = "rebalance" + (f"; event trims {sorted(trim)}" if trim else "") + \
+                (f"; restores {sorted(restore)}" if restore else "")
+            return Decision(w, tgt, reason=reason)
         except Exception as e:  # never crash: hold the existing portfolio
             return Decision(HOLD, reason=f"error: {type(e).__name__}: {e}")

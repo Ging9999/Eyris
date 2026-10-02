@@ -46,6 +46,12 @@ class Params:
     gross_min: float = 0.2           # exposure floor for overlays
     trend_days: int = 20             # EW-basket return lookback for the trend overlay
     trend_floor: float = 0.5         # exposure multiplier when the basket trend is negative
+    # events.py: earnings risk control
+    event_mode: str = "off"          # "off" | "trim" | "trim_restore"
+    event_cut: float = 1.0           # fraction of the name's target removed before the jump
+    event_min_move: float = 0.0      # only names whose typical earnings gap >= this (abs log)
+    event_trim_round: int = 7        # trim from this round on the day before the jump
+    event_restore_round: int = 1     # restore at this round on the jump day ("trim_restore")
     # alpha.py
     use_alpha: bool = False
     tilt: float = 0.0                # multiplicative tilt strength on risk weights
@@ -71,6 +77,11 @@ class Params:
             raise ValueError("gross_min must be in [0, gross]")
         if not 1 <= self.trend_days <= MAX_LOOKBACK_DAYS:
             raise ValueError("trend_days must be in [1, %d]" % MAX_LOOKBACK_DAYS)
+        if self.event_mode not in ("off", "trim", "trim_restore"):
+            raise ValueError("unknown event_mode")
+        if not 0 <= self.event_cut <= 1 or not 1 <= self.event_trim_round <= 7 \
+                or not 1 <= self.event_restore_round <= 7:
+            raise ValueError("bad event parameters")
         if not 0 <= self.trend_floor <= 1:
             raise ValueError("trend_floor must be in [0, 1]")
 

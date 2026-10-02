@@ -14,7 +14,7 @@ import pandas as pd
 from . import alpha
 from .config import ANNUALIZATION, FEE_RATE, INITIAL_NAV, MAX_WEIGHT, N_ASSETS, WINDOW_DAYS
 from .data import Panels, Rounds
-from .execution import HOLD, rebalance, sanitize
+from .execution import HOLD, apply_events, rebalance, sanitize
 from .risk import cap_weights
 
 METRICS = ("cumulative_return", "sharpe_ratio", "maximum_drawdown", "turnover")
@@ -113,10 +113,18 @@ def agent_targets(agent, p: Panels, r: Rounds, ks):
     return np.array([sanitize(t) for t in out])
 
 
-def target_policy(targets, k_first, params):
-    """Partial rebalancing toward precomputed targets (targets[k - k_first])."""
+def target_policy(targets, k_first, params, event_flags=None):
+    """Partial rebalancing toward precomputed targets (targets[k - k_first]).
+
+    event_flags(k) -> (trim, restore) applies the same overlay as Agent.decide.
+    """
     def policy(k, w):
-        return rebalance(w, targets[k - k_first], params.lam, params.band, params.min_trade)
+        tgt = targets[k - k_first]
+        out = rebalance(w, tgt, params.lam, params.band, params.min_trade)
+        if event_flags is not None:
+            trim, restore = event_flags(k)
+            out = apply_events(w, out, tgt, trim, restore, params.min_trade)
+        return out
     return policy
 
 
