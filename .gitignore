@@ -13,3 +13,4 @@ output/
 models/*.txt.tmp
 models/alpha_lgbm*.txt
 Eyris-agent.zip
+.kit-clone/

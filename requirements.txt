@@ -8,3 +8,4 @@ matplotlib>=3.8
 pytest>=7.4
 yfinance>=0.2.40  # live data pre-step only; never imported by the decision path
 anthropic>=1.0  # optional news veto (eyris/news.py); unused unless news_veto=true and ANTHROPIC_API_KEY is set
+tzdata>=2024.1  # time zones on Windows (zoneinfo)
