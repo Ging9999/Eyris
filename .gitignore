@@ -12,3 +12,4 @@ output/
 .env
 models/*.txt.tmp
 models/alpha_lgbm*.txt
+Eyris-agent.zip
