@@ -20,6 +20,13 @@ The README covers setup and submission. The `reports/` folder covers every exper
 - LLMs are allowed only from the approved list (Claude Opus 5 / Sonnet 5 / Haiku 4.5, GPT-5, Gemini 2.5 …), with disclosure of prompts.
   `eyris/news.py` therefore uses `claude-opus-5`, not newer models, and no fallbacks to unlisted models.
 - Only public info published before each deadline.
+- Organizer clarifications (Discord, Oct 2026):
+  - Free sources and free tiers of paid platforms are allowed; paid or private data feeds are not.
+    Our feeds (organizer dataset, Yahoo bars/RSS/earnings dates, SEC EDGAR) are all free.
+  - Free and open-source models, including finance-tuned ones, are allowed.
+  - Nodexi Agentics LLM API credits: apply Oct 4 00:00 – Oct 5 23:59 ET to tsg.icaif@gmail.com with team name, team token
+    and members' names/emails (team ID too). Access is set up Oct 6. The credits may be for a non-Anthropic provider; if so,
+    add an adapter in `eyris/news.py` (same prompt, schema and logging).
 
 ## Engineering rules
 
@@ -45,7 +52,8 @@ Gross 0.5–0.85 is tied against an LLM-style field; 0.5 wins on worst-case wind
 
 ## Open items
 
-1. The user must register before 2026-10-08 00:00 ET and set the secrets: CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN,
+1. The user must register (by Oct 3, so the team token exists for the Oct 4–5 credit application; hard deadline
+   2026-10-08 00:00 ET for Validation) and set the secrets: CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN,
    optionally ANTHROPIC_API_KEY and SEC_USER_AGENT.
 2. On Validation (Oct 8–9), check `private/<round>/decision_log.json`:
    - `holdings_source` should be `portfolio_api`. The organizer portfolio schema is undocumented; if it shows `none`/`local_state`,
