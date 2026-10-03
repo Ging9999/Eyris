@@ -57,6 +57,7 @@ class Params:
     event_trim_round: int = 7        # trim from this round on the day before the jump
     event_restore_round: int = 1     # restore at this round on the jump day ("trim_restore")
     news_veto: bool = False          # live only: reduce-only LLM news veto (eyris/news.py)
+    finbert_shadow: bool = False     # live only: log FinBERT headline sentiment after the round (never decides)
     # sentiment.py: contrarian VIX overlay (scale gross by vix_boost when fear is high)
     vix_mode: str = "off"            # "off" | "level" (VIX > threshold) | "z" (60-day z-score > threshold)
     vix_threshold: float = 25.0

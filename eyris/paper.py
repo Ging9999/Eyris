@@ -59,6 +59,8 @@ def run_one(day, n, now=None, snapshot=None, notify=True):
     except Exception as e:  # a paper round must never stop the loop
         status = f"ERROR {type(e).__name__}: {str(e)[:200]}"
         print(json.dumps({"status": status, "round_id": rid}))
+    if log is not None and now is None and snapshot is None:   # live paper rounds only, after the decision
+        live.finbert_post_step(live.load_params(), rid)
     if notify:
         title, msg, _ = alerts.round_summary(status, rid, log)
         alerts.notify("PAPER " + title, msg, urgent=status.startswith("ERROR") or bool(log and log.get("breaker")))

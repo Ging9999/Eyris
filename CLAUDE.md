@@ -5,7 +5,7 @@ The README covers setup and submission. The `reports/` folder covers every exper
 
 ## Commands
 
-- Tests: `python -m pytest -q` (52 tests; must stay green)
+- Tests: `python -m pytest -q` (54 tests; must stay green)
 - One live decision, no upload: `python -m eyris.live decide --phase validation --round-id validation-2026-10-08-r1`
 - Decide and upload the open round: `python -m eyris.live run` (needs CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN; alerts via NTFY_TOPIC / DISCORD_WEBHOOK_URL)
 - Verify every logged round reproduces exactly: `python -m eyris.live replay`
@@ -36,7 +36,8 @@ The README covers setup and submission. The `reports/` folder covers every exper
 
 - No lookahead: features use bars ≤ `info_end = exec_bar - 1`. The lookahead tests corrupt future data and require identical past decisions.
 - The decision path (`agent.py`, `risk.py`, `execution.py`, `sentiment.py`) is deterministic and offline. Network access is only
-  in the `live.py` fetch pre-step (bars, VIX), the optional `news.py` veto, and the `alerts.py` post-step.
+  in the `live.py` fetch pre-step (bars, VIX), the optional `news.py` veto, and the post-steps (`alerts.py`, FinBERT shadow).
+- FinBERT shadow runs after the upload/hold and never influences a decision; torch/transformers are optional (requirements-finbert.txt).
 - Every input of a live decision is logged in `decision_log.json["inputs"]`; `replay` must reproduce it bit-for-bit.
   Anything new that influences a decision must be added to `inputs` and to `replay_round`.
 - Circuit breaker (`breaker_l1` 0.08, `breaker_name` 0.03): HOLD on a target jump vs the previous round's logged base target.
@@ -64,6 +65,8 @@ VIX sentiment (`eyris/sentiment.py`, `reports/sentiment_experiment.md`): de-risk
 (gross ×1.4 when VIX > 25) passes the rule narrowly but is not significant and raised the 2022 drawdown. Built, `vix_mode: off`.
 October check (`reports/october_check.md`, 31 Oct 8-16 windows 2021-25): nothing beats current clearly; full earnings trims
 and gross 0.7 are worse; VIX overlay slightly better, entirely from Oct 2022 and 2025.
+FinBERT (`eyris/finbert.py`, `reports/finbert_experiment.md`, FNSPID 2022-23, 22 of 30 names): IC +0.037 then -0.001;
+negative-news trims lose on turnover, tilts tie. Kept as shadow-only logging (`finbert_shadow: true`); also evidence against the news veto.
 
 ## Open items
 

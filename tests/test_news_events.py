@@ -138,3 +138,35 @@ def test_vix_overlay_scales_target_and_fails_safe(tmp_path, monkeypatch):
     assert m == 1.0 and "vix_error" in info
     with pytest.raises(ValueError):
         Params(gross=0.8, vix_mode="level", vix_boost=1.4)          # 0.8 x 1.4 > 100%
+
+
+# --------------------------------------------------------------------------- FinBERT shadow mode
+def test_finbert_shadow_logs_scores_and_never_raises(tmp_path, monkeypatch):
+    import json as _json
+    from datetime import datetime, timedelta
+    import numpy as _np
+    from eyris import finbert
+    until = datetime(2026, 10, 8, 9, 10)
+    items = [{"symbol": "AAPL", "published": until - timedelta(hours=1), "source": "Yahoo Finance",
+              "title": "Apple recalls devices", "text": ""},
+             {"symbol": "AAPL", "published": until - timedelta(hours=2), "source": "Yahoo Finance",
+              "title": "Apple beats estimates", "text": ""}]
+    monkeypatch.setattr(finbert, "available", lambda: True)
+    monkeypatch.setattr(finbert, "sentiment", lambda titles, batch=64: _np.array([-0.9, 0.7]))
+    s = finbert.shadow(until, until - timedelta(hours=18), log_dir=tmp_path, collect=lambda u, s: (items, []))
+    assert s["status"] == "ok: 2 headlines" and s["by_symbol"]["AAPL"]["n"] == 2
+    assert s["by_symbol"]["AAPL"]["min"] == -0.9
+    log = _json.loads((tmp_path / "finbert_log.json").read_text())
+    assert [h["title"] for h in log["headlines"]] == ["Apple recalls devices", "Apple beats estimates"]
+
+    def boom(u, s):
+        raise RuntimeError("feed down")
+    assert finbert.shadow(until, until, collect=boom)["status"].startswith("error")
+    monkeypatch.setattr(finbert, "available", lambda: False)
+    assert finbert.shadow(until, until)["status"].startswith("skipped")
+
+
+def test_finbert_shadow_is_off_unless_enabled():
+    from eyris import live
+    from eyris.config import Params
+    assert live.finbert_post_step(Params(), "official-2026-10-12-r1") is None

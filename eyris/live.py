@@ -235,6 +235,17 @@ def vix_multiplier(params, round_id, fetch=fetch_vix):
         return 1.0, {"vix_error": f"{type(e).__name__}: {e}", "vix_multiplier": 1.0}
 
 
+def finbert_post_step(params, round_id, hours=18):
+    """Shadow-mode FinBERT scoring after the round's upload/hold. Logged only; never raises."""
+    if not getattr(params, "finbert_shadow", False):
+        return None
+    from . import finbert
+    deadline = deadline_of(round_id)
+    s = finbert.shadow(deadline, deadline - timedelta(hours=hours), log_dir=PRIVATE / round_id)
+    print(json.dumps({"finbert_shadow": s.get("status")}))
+    return s
+
+
 def round_flags(params, round_id, deadline, history_days, out_dir):
     """Earnings-event trims/restores plus the reduce-only news veto for one round."""
     from . import events, news
@@ -549,6 +560,8 @@ def run_round(a):
     finally:
         if status != "DRY_RUN":
             alerts.notify(*alerts.round_summary(status, rid, log, receipt))
+        if log is not None:      # after the upload, so it can never delay a decision
+            finbert_post_step(load_params(), rid)
 
 
 if __name__ == "__main__":

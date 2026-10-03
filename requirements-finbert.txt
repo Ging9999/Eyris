@@ -1,0 +1,6 @@
+# Optional: FinBERT shadow mode and scripts/finbert_experiment.py (not needed to trade).
+# CPU-only PyTorch keeps the install small:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-finbert.txt
+torch>=2.2
+transformers>=4.40
