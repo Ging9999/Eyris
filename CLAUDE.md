@@ -5,11 +5,11 @@ The README covers setup and submission. The `reports/` folder covers every exper
 
 ## Commands
 
-- Tests: `python -m pytest -q` (51 tests; must stay green)
+- Tests: `python -m pytest -q` (52 tests; must stay green)
 - One live decision, no upload: `python -m eyris.live decide --phase validation --round-id validation-2026-10-08-r1`
 - Decide and upload the open round: `python -m eyris.live run` (needs CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN; alerts via NTFY_TOPIC / DISCORD_WEBHOOK_URL)
 - Verify every logged round reproduces exactly: `python -m eyris.live replay`
-- Paper-trade a normal trading day (never uploads; own ledger private/paper_state.json): `python -m eyris.live paper --loop --reset`, review via `validation_review.py analyze --phase paper`
+- Paper-trade a normal trading day (never uploads; own ledger private/paper_state.json): `python -m eyris.live paper --loop --reset`; replay past days: `paper --from YYYY-MM-DD --to YYYY-MM-DD --reset`; review via `validation_review.py analyze --phase paper`
 - After a phase: `python scripts/validation_review.py all --phase validation` (report in private/review/<phase>/review.md)
 - Change settings: `python scripts/set_config.py key=value --note "why"` (validated; logged to models/config_history.json)
 - Research: `scripts/tune.py`, `scripts/report.py`, `scripts/event_experiment.py`, `scripts/agentic_research.py`

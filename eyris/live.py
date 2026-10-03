@@ -469,6 +469,8 @@ def main(argv=None):
     pp.add_argument("--round", type=int, choices=range(1, 8), help="run this round of today now")
     pp.add_argument("--day", help="YYYY-MM-DD (default: today in New York)")
     pp.add_argument("--reset", action="store_true", help="start the paper portfolio from cash")
+    pp.add_argument("--from", dest="start", help="replay past days from YYYY-MM-DD (with --to), then review")
+    pp.add_argument("--to", dest="end", help="last day to replay (default: today)")
     rp = sub.add_parser("replay", help="re-run logged decisions from saved inputs and verify they match")
     rp.add_argument("round_ids", nargs="*", help="rounds to replay (default: all in private/)")
     a = ap.parse_args(argv)

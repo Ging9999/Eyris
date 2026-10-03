@@ -110,3 +110,16 @@ def test_paper_round_uses_its_own_ledger_and_never_touches_state(tmp_path, monke
     assert paper.run_one("2026-10-05", 2) == "PAPER_TRADE"
     assert np.isclose(seen["cur"].sum(), 0.5)                     # second round sees the paper holdings
     assert (tmp_path / "paper_state.json").exists() and not (tmp_path / "state.json").exists()
+
+
+def test_exec_prices_fill_a_missing_minute_from_the_next_one():
+    rounds, _, _ = _phase(days=("2026-10-08",))
+    t = pd.date_range("2026-10-08 09:30", "2026-10-08 15:59", freq="1min", tz=review.ET)
+    rows = [{"timestamp": ts, "ticker": s, "open": 100 + i, "high": 101 + i, "low": 99 + i, "close": 100.5 + i}
+            for i, ts in enumerate(t) for s in UNIVERSE
+            if not (s == "GS" and ts == pd.Timestamp("2026-10-08 10:30", tz=review.ET))]   # Yahoo gap
+    minute = pd.DataFrame(rows)
+    px = review.exec_prices(minute, rounds)
+    assert np.isfinite(px).all()
+    assert px[1, UNIVERSE.index("GS")] == 100 + 61          # 10:31 open
+    assert review.filled_prices(minute, rounds) == 1

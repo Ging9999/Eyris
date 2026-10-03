@@ -154,6 +154,7 @@ def cmd_analyze(phase):
         closes = pd.read_csv(closes_f, index_col=0, parse_dates=True)
         day_close = {ts.date(): row.to_numpy(dtype=float) for ts, row in closes.iterrows()}
         px = review.exec_prices(minute, rounds)
+        report["prices_filled_from_neighbour_minute"] = review.filled_prices(minute, rounds)
         weights = {}
         for r in rounds:
             f = live.PRIVATE / r["id"] / "decision.json"
@@ -164,7 +165,9 @@ def cmd_analyze(phase):
         m = review.metrics_of(ours, points)
         report["our_metrics_replica"] = m
         lines += ["## 2. Our metrics (replica of the organizer ledger at real 1-minute fills)", "",
-                  *[f"- {k}: {v:.6g}" for k, v in m.items()], ""]
+                  *[f"- {k}: {v:.6g}" for k, v in m.items()],
+                  f"- execution prices taken from a neighbouring minute (Yahoo gap): "
+                  f"{report['prices_filled_from_neighbour_minute']} of {px.size}", ""]
         if "metrics" in api:
             theirs = review.organizer_periods(api["metrics"])
             rec, ok = review.reconcile(ours, theirs)

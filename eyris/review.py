@@ -19,6 +19,7 @@ from .backtest import compute_metrics, trade_to
 from .config import FEE_RATE, INITIAL_NAV, N_ASSETS, UNIVERSE
 
 ET = "America/New_York"
+FILL_WINDOW = pd.Timedelta(minutes=5)   # nearest-minute fallback for missing 1-minute opens
 
 # Pre-registered on 2026-10-02, before Live Validation. Change them only with a reason
 # that does not depend on Validation P&L.
@@ -91,8 +92,32 @@ def exec_prices(minute, rounds):
     ts = pd.to_datetime(m["timestamp"])
     m["timestamp"] = ts.dt.tz_convert(ET) if ts.dt.tz is not None else ts.dt.tz_localize(ET)
     wide = m.pivot_table(index="timestamp", columns="ticker", values="open").reindex(columns=list(UNIVERSE))
-    return np.array([wide.loc[r["exec"]].to_numpy(dtype=float) if r["exec"] in wide.index
-                     else np.full(N_ASSETS, np.nan) for r in rounds])
+    out = np.full((len(rounds), N_ASSETS), np.nan)
+    for k, r in enumerate(rounds):
+        if r["exec"] in wide.index:
+            out[k] = wide.loc[r["exec"]].to_numpy(dtype=float)
+        # Yahoo omits minutes with no reported trade: take the next open within FILL_WINDOW,
+        # else the last open before (counted by filled_prices()).
+        for j in np.flatnonzero(~np.isfinite(out[k])):
+            col = wide.iloc[:, j].dropna()
+            after = col[(col.index > r["exec"]) & (col.index <= r["exec"] + FILL_WINDOW)]
+            before = col[col.index < r["exec"]]
+            if len(after):
+                out[k, j] = after.iloc[0]
+            elif len(before):
+                out[k, j] = before.iloc[-1]
+    return out
+
+
+def filled_prices(minute, rounds):
+    """How many execution prices exec_prices() had to take from a neighbouring minute."""
+    m = minute.copy()
+    ts = pd.to_datetime(m["timestamp"])
+    m["timestamp"] = ts.dt.tz_convert(ET) if ts.dt.tz is not None else ts.dt.tz_localize(ET)
+    wide = m.pivot_table(index="timestamp", columns="ticker", values="open").reindex(columns=list(UNIVERSE))
+    exact = np.array([wide.loc[r["exec"]].to_numpy(dtype=float) if r["exec"] in wide.index
+                      else np.full(N_ASSETS, np.nan) for r in rounds])
+    return int((~np.isfinite(exact)).sum())
 
 
 def hourly_mid_proxy(minute, rounds):

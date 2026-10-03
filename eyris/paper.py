@@ -3,6 +3,7 @@
   python -m eyris.live paper --loop            # run today's remaining rounds on time, then the review
   python -m eyris.live paper --round 3         # one round now (smoke test)
   python -m eyris.live paper --loop --reset    # start the paper portfolio from cash
+  python -m eyris.live paper --from 2026-09-21 --to 2026-10-02 --reset   # replay past days, then review
 
 Each round runs 17 minutes before its deadline (08:53, 10:08 ... 15:08 ET) through
 live.prepare, exactly like `run`. The differences: holdings come from a separate
@@ -41,13 +42,13 @@ def holdings(prices):
     return np.zeros(len(UNIVERSE)) if w is None else w
 
 
-def run_one(day, n, now=None):
+def run_one(day, n, now=None, snapshot=None, notify=True):
     rid = round_id(day, n)
     deadline = live.deadline_of(rid)
     as_of = min(now or datetime.now(live.ET), deadline)
     status, log = "ERROR", None
     try:
-        path, log = live.prepare("paper", rid, as_of=as_of, holdings_fn=holdings)
+        path, log = live.prepare("paper", rid, as_of=as_of, holdings_fn=holdings, snapshot=snapshot)
         if path is not None:
             st = {"round_id": rid, "weights": log["weights"], "prices": log["prices"]}
             state_file().write_text(json.dumps(st, indent=1))
@@ -58,8 +59,9 @@ def run_one(day, n, now=None):
     except Exception as e:  # a paper round must never stop the loop
         status = f"ERROR {type(e).__name__}: {str(e)[:200]}"
         print(json.dumps({"status": status, "round_id": rid}))
-    title, msg, _ = alerts.round_summary(status, rid, log)
-    alerts.notify("PAPER " + title, msg, urgent=status.startswith("ERROR") or bool(log and log.get("breaker")))
+    if notify:
+        title, msg, _ = alerts.round_summary(status, rid, log)
+        alerts.notify("PAPER " + title, msg, urgent=status.startswith("ERROR") or bool(log and log.get("breaker")))
     return status
 
 
@@ -93,14 +95,37 @@ def loop(day):
     review()
 
 
+def replay_days(start, end):
+    """Replay past trading days round by round (one download, cut at each deadline), then review.
+
+    Yahoo keeps ~60 days of 30-minute bars and the agent needs 40 days of history,
+    so ``start`` can be at most ~2-3 weeks back.
+    """
+    import pandas as pd
+    df30 = live.fetch_30m()
+    live.SNAPSHOTS.mkdir(parents=True, exist_ok=True)
+    snap = live.SNAPSHOTS / f"paper-replay-{start}-{end}_30m.parquet"
+    df30.to_parquet(snap)
+    counts = {}
+    for day in pd.bdate_range(start, end):
+        for n in range(1, 8):
+            s = run_one(day.date().isoformat(), n, snapshot=snap, notify=False)
+            counts[s.split(":")[0]] = counts.get(s.split(":")[0], 0) + 1
+    print(json.dumps(counts))
+    review()
+
+
 def main(a):
     day = a.day or datetime.now(live.ET).date().isoformat()
     if a.reset and state_file().exists():
         state_file().unlink()
         print("paper portfolio reset to cash")
-    if datetime.fromisoformat(day).weekday() >= 5 and not a.round:
+    if datetime.fromisoformat(day).weekday() >= 5 and not (a.round or a.start):
         print(f"{day} is a weekend: no market session. Use --round N for a smoke test.")
         return 1
+    if a.start:
+        replay_days(a.start, a.end or day)
+        return 0
     if a.round:
         run_one(day, a.round)
         return 0
