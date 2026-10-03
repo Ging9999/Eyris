@@ -4,7 +4,7 @@ from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.spatial.distance import squareform
 from sklearn.covariance import ledoit_wolf
 
-from .config import ANNUALIZATION, ROUNDS_PER_DAY
+from .config import ANNUALIZATION, ROUNDS_PER_DAY, SECTORS
 
 
 def bar_returns(close, lookback_days):
@@ -57,12 +57,15 @@ def ewma_weights(n, halflife_days):
     return w * n / w.sum()
 
 
-def inverse_vol(returns, total, cap, halflife_days=0.0):
+def inverse_vol(returns, total, cap, halflife_days=0.0, power=1.0, top_k=0):
     w = ewma_weights(len(returns), halflife_days)
     mu = (w[:, None] * returns).sum(0) / w.sum()
     vol = np.sqrt((w[:, None] * (returns - mu) ** 2).sum(0) / w.sum())
     vol = np.where(vol > 1e-12, vol, np.nanmedian(vol[vol > 1e-12]) if (vol > 1e-12).any() else 1.0)
-    return cap_weights(1.0 / vol, total, cap)
+    score = vol ** -power
+    if 0 < top_k < len(vol):
+        score = np.where(np.argsort(np.argsort(vol, kind="stable"), kind="stable") < top_k, score, 0.0)
+    return cap_weights(score, total, cap)
 
 
 def shrunk_cov(returns, halflife_days=0.0):
@@ -115,13 +118,47 @@ def hrp(cov, total, cap):
     return cap_weights(w, total, cap)
 
 
+def erc(cov, total, cap, iters=500):
+    """Equal risk contribution (long-only risk parity) via damped fixed point, then capped."""
+    n = cov.shape[0]
+    w = 1.0 / np.sqrt(np.diag(cov))
+    w /= w.sum()
+    for _ in range(iters):
+        mrc = cov @ w
+        w_new = 0.5 * w + 0.5 * (1.0 / np.maximum(mrc, 1e-18)) / n / np.maximum(w @ mrc, 1e-18) * w.sum()
+        w_new /= w_new.sum()
+        if np.abs(w_new - w).sum() < 1e-12:
+            w = w_new
+            break
+        w = w_new
+    return cap_weights(w, total, cap)
+
+
+def sector_weights(r, cap, budget="equal", halflife_days=0.0):
+    """Inverse vol inside each sector; sector budgets equal or inverse sector-portfolio vol."""
+    n = r.shape[1]
+    w = np.zeros(n)
+    budgets = []
+    for idx in SECTORS:
+        idx = list(idx)
+        ws = inverse_vol(r[:, idx], 1.0, 1.0, halflife_days)
+        w[idx] = ws
+        budgets.append(1.0 if budget == "equal" else 1.0 / max(np.std(r[:, idx] @ ws), 1e-12))
+    b = np.asarray(budgets) / np.sum(budgets)
+    for j, idx in enumerate(SECTORS):
+        w[list(idx)] *= b[j]
+    return cap_weights(w, 1.0, cap)
+
+
 def base_weights(r, params, cap):
     """Shape of the stock book, summing to 1."""
     m = params.risk_method
     if m == "ew":
         return cap_weights(np.ones(r.shape[1]), 1.0, cap)
     if m == "invvol":
-        return inverse_vol(r, 1.0, cap, params.halflife_days)
+        return inverse_vol(r, 1.0, cap, params.halflife_days, params.vol_power, params.top_k)
+    if m in ("sector_eq", "sector_invvol"):
+        return sector_weights(r, cap, "equal" if m == "sector_eq" else "invvol", params.halflife_days)
     cov = shrunk_cov(r, params.halflife_days)
     if m == "minvar":
         return min_variance(cov, 1.0, cap)
@@ -129,6 +166,8 @@ def base_weights(r, params, cap):
         return 0.5 * inverse_vol(r, 1.0, cap, params.halflife_days) + 0.5 * min_variance(cov, 1.0, cap)
     if m == "hrp":
         return hrp(cov, 1.0, cap)
+    if m == "erc":
+        return erc(cov, 1.0, cap)
     raise ValueError(m)
 
 

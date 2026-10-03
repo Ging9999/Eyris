@@ -1,0 +1,138 @@
+{
+ "overall": [
+  {
+   "name": "current",
+   "rank_score": 7.92741935483871,
+   "rank_active": 4.846774193548387,
+   "rank_llm": 3.806451612903226,
+   "cumulative_return": 0.009400484902866319,
+   "maximum_drawdown": 0.015049753174731579,
+   "turnover": 0.004771066843040739,
+   "windows": 31
+  },
+  {
+   "name": "earnings_trim_full",
+   "rank_score": 8.201612903225806,
+   "rank_active": 5.024193548387097,
+   "rank_llm": 3.7661290322580645,
+   "cumulative_return": 0.00955554972141491,
+   "maximum_drawdown": 0.014378438682234136,
+   "turnover": 0.0064622619252952575,
+   "windows": 31
+  },
+  {
+   "name": "earnings_trim_half",
+   "rank_score": 7.967741935483871,
+   "rank_active": 4.854838709677419,
+   "rank_llm": 3.774193548387097,
+   "cumulative_return": 0.009464531491686549,
+   "maximum_drawdown": 0.014361065549239467,
+   "turnover": 0.005386866357984763,
+   "windows": 31
+  },
+  {
+   "name": "gross_0.7",
+   "rank_score": 8.209677419354838,
+   "rank_active": 5.137096774193548,
+   "rank_llm": 3.7096774193548385,
+   "cumulative_return": 0.013127179382821071,
+   "maximum_drawdown": 0.020974851462893237,
+   "turnover": 0.006716858979652078,
+   "windows": 31
+  },
+  {
+   "name": "vix_level25_x1.4",
+   "rank_score": 7.790322580645161,
+   "rank_active": 4.862903225806452,
+   "rank_llm": 3.7338709677419355,
+   "cumulative_return": 0.012183413287599152,
+   "maximum_drawdown": 0.016177357695693697,
+   "turnover": 0.005162493195713313,
+   "windows": 31
+  }
+ ],
+ "by_year": [
+  {
+   "year": 2021,
+   "current": 10.166666666666666,
+   "earnings_trim_full": 10.416666666666666,
+   "earnings_trim_half": 10.166666666666666,
+   "gross_0.7": 9.791666666666666,
+   "vix_level25_x1.4": 10.166666666666666
+  },
+  {
+   "year": 2022,
+   "current": 8.1,
+   "earnings_trim_full": 7.6,
+   "earnings_trim_half": 7.65,
+   "gross_0.7": 7.6,
+   "vix_level25_x1.4": 7.6
+  },
+  {
+   "year": 2023,
+   "current": 4.958333333333333,
+   "earnings_trim_full": 6.416666666666667,
+   "earnings_trim_half": 5.958333333333333,
+   "gross_0.7": 6.291666666666667,
+   "vix_level25_x1.4": 4.958333333333333
+  },
+  {
+   "year": 2024,
+   "current": 7.928571428571429,
+   "earnings_trim_full": 7.285714285714286,
+   "earnings_trim_half": 7.642857142857143,
+   "gross_0.7": 8.535714285714286,
+   "vix_level25_x1.4": 7.928571428571429
+  },
+  {
+   "year": 2025,
+   "current": 8.428571428571429,
+   "earnings_trim_full": 9.178571428571429,
+   "earnings_trim_half": 8.357142857142858,
+   "gross_0.7": 8.607142857142858,
+   "vix_level25_x1.4": 8.178571428571429
+  }
+ ],
+ "rank_llm_by_year": [
+  {
+   "year": 2021,
+   "current": 5.083333333333333,
+   "earnings_trim_full": 5.083333333333333,
+   "earnings_trim_half": 5.083333333333333,
+   "gross_0.7": 4.75,
+   "vix_level25_x1.4": 5.083333333333333
+  },
+  {
+   "year": 2022,
+   "current": 4.4,
+   "earnings_trim_full": 4.1,
+   "earnings_trim_half": 4.2,
+   "gross_0.7": 4.0,
+   "vix_level25_x1.4": 4.0
+  },
+  {
+   "year": 2023,
+   "current": 3.125,
+   "earnings_trim_full": 3.2916666666666665,
+   "earnings_trim_half": 3.2916666666666665,
+   "gross_0.7": 3.3333333333333335,
+   "vix_level25_x1.4": 3.125
+  },
+  {
+   "year": 2024,
+   "current": 3.357142857142857,
+   "earnings_trim_full": 3.1785714285714284,
+   "earnings_trim_half": 3.2857142857142856,
+   "gross_0.7": 3.357142857142857,
+   "vix_level25_x1.4": 3.357142857142857
+  },
+  {
+   "year": 2025,
+   "current": 3.3214285714285716,
+   "earnings_trim_full": 3.392857142857143,
+   "earnings_trim_half": 3.25,
+   "gross_0.7": 3.2857142857142856,
+   "vix_level25_x1.4": 3.2857142857142856
+  }
+ ]
+}

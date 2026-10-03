@@ -61,6 +61,22 @@ class Agent:
             self._risk_cache = {key: risk.risk_weights(p.close[:cut + 1], self.params)}
         return self._risk_cache[key]
 
+    def target_jump(self, p: Panels, reference=None):
+        """(L1, max per-name) change of the base target vs a reference.
+
+        reference: the previous round's logged base target (an independent data
+        fetch, so a bad download shows up as a jump). Without one, the target
+        recomputed from this snapshot as of the previous completed day.
+        """
+        if reference is None:
+            cut = last_complete_bar(p)
+            prev = np.flatnonzero(p.day[:cut + 1] < p.day[cut])
+            if len(prev) < 2:
+                return 0.0, 0.0
+            reference = risk.risk_weights(p.close[:int(prev[-1]) + 1], self.params)
+        d = np.abs(self.target(p) - np.asarray(reference, dtype=float))
+        return float(d.sum()), float(d.max())
+
     def target(self, p: Panels):
         w = self.risk_target(p)
         if self.alpha_on:
@@ -71,11 +87,14 @@ class Agent:
             w = alpha.tilt(w, scores, self.params.tilt, self.params.stock_cap)
         return w
 
-    def decide(self, p: Panels, current_weights, trim=None, restore=None) -> Decision:
+    def decide(self, p: Panels, current_weights, trim=None, restore=None, gross_mult=1.0,
+               reference=None) -> Decision:
         """``p`` must contain only bars completed before the submission deadline.
 
         trim / restore: event flags for this round ({asset: cut}, {asset}), from
         events.EventSchedule and/or the reduce-only news veto.
+        gross_mult: target gross multiplier from the VIX overlay (sentiment.py).
+        reference: previous round's base target for the circuit breaker (see target_jump).
         """
         try:
             cur = np.asarray(current_weights, dtype=float)
@@ -83,16 +102,26 @@ class Agent:
                 return Decision(HOLD, reason="invalid current weights")
             if not np.isfinite(p.close[-max(2, len(p)):]).all():
                 return Decision(HOLD, reason="non-finite prices")
-            tgt = self.target(p)
+            if not (np.isfinite(gross_mult) and 0 < gross_mult <= 2):
+                return Decision(HOLD, reason="invalid gross multiplier")
+            if self.params.breaker_l1 > 0:
+                l1, worst = self.target_jump(p, reference)
+                if not np.isfinite(l1) or l1 > self.params.breaker_l1 or worst > self.params.breaker_name:
+                    return Decision(HOLD, reason=f"circuit breaker: target moved {l1:.3f} L1 "
+                                                 f"(max name {worst:.3f}) since the previous day; check the data",
+                                    info={"breaker": True, "jump_l1": l1, "jump_name": worst})
+            base = self.target(p)
+            tgt = base * gross_mult
             if tgt.shape != (N_ASSETS,) or not np.isfinite(tgt).all():
                 return Decision(HOLD, reason="non-finite target")
             tgt = sanitize(tgt)
             w = rebalance(cur, tgt, self.params.lam, self.params.band, self.params.min_trade)
             w = apply_events(cur, w, tgt, trim or {}, restore or set(), self.params.min_trade)
+            info = {"base_target": [float(x) for x in base]}
             if w is HOLD:
-                return Decision(HOLD, tgt, reason="inside no-trade band")
+                return Decision(HOLD, tgt, reason="inside no-trade band", info=info)
             reason = "rebalance" + (f"; event trims {sorted(trim)}" if trim else "") + \
                 (f"; restores {sorted(restore)}" if restore else "")
-            return Decision(w, tgt, reason=reason)
+            return Decision(w, tgt, reason=reason, info=info)
         except Exception as e:  # never crash: hold the existing portfolio
             return Decision(HOLD, reason=f"error: {type(e).__name__}: {e}")

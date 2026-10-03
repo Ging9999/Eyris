@@ -262,3 +262,38 @@ def test_factor_model_has_no_lookahead_and_matches_single_path():
     for j in range(0, len(past), 11):
         single = Agent(params, model).target(p.head(int(r.info_end[past[j]])))
         np.testing.assert_allclose(t1[j], sanitize(single), atol=2e-8)
+
+
+def test_vol_power_and_top_k():
+    from eyris.risk import inverse_vol
+    rng = np.random.default_rng(1)
+    vols = np.linspace(0.005, 0.03, N_ASSETS)
+    r = rng.standard_normal((400, N_ASSETS)) * vols
+    w1 = inverse_vol(r, 0.5, 0.30)
+    w2 = inverse_vol(r, 0.5, 0.30, power=2.0)
+    assert np.isclose(w1.sum(), 0.5) and np.isclose(w2.sum(), 0.5)
+    assert w2[0] / w2[-1] > w1[0] / w1[-1]                 # stronger tilt to low vol
+    wk = inverse_vol(r, 0.5, 0.10, top_k=10)
+    assert (wk > 0).sum() == 10 and (wk[:10] > 0).all()    # the 10 lowest-vol names
+    assert np.isclose(wk.sum(), 0.5) and wk.max() <= 0.10 + 1e-12
+    with pytest.raises(ValueError):
+        Params(gross=0.5, stock_cap=0.10, top_k=4)        # 4 x 10% cannot reach 50%
+
+
+@pytest.mark.parametrize("method", ["erc", "sector_eq", "sector_invvol"])
+def test_structural_risk_methods_respect_constraints(synth, method):
+    _, p, _ = synth
+    from eyris.risk import risk_weights
+    w = risk_weights(p.close[:2000], Params(risk_method=method, lookback_days=20, gross=0.5))
+    assert np.isfinite(w).all() and (w >= 0).all() and w.max() <= 0.10 + 1e-12
+    assert np.isclose(w.sum(), 0.5)
+
+
+def test_gross_multiplier_scales_target(synth):
+    _, p, _ = synth
+    head = p.head(len(p) - 1)
+    a = Agent(Params(gross=0.5, lookback_days=20, lam=1.0, band=0.0, min_trade=0.0))
+    base = a.decide(head, np.zeros(N_ASSETS))
+    boosted = a.decide(head, np.zeros(N_ASSETS), gross_mult=1.4)
+    assert np.isclose(boosted.weights.sum(), 1.4 * base.weights.sum(), atol=1e-6)
+    assert a.decide(head, np.zeros(N_ASSETS), gross_mult=float("nan")).hold
