@@ -5,10 +5,11 @@ The README covers setup and submission. The `reports/` folder covers every exper
 
 ## Commands
 
-- Tests: `python -m pytest -q` (50 tests; must stay green)
+- Tests: `python -m pytest -q` (51 tests; must stay green)
 - One live decision, no upload: `python -m eyris.live decide --phase validation --round-id validation-2026-10-08-r1`
 - Decide and upload the open round: `python -m eyris.live run` (needs CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN; alerts via NTFY_TOPIC / DISCORD_WEBHOOK_URL)
 - Verify every logged round reproduces exactly: `python -m eyris.live replay`
+- Paper-trade a normal trading day (never uploads; own ledger private/paper_state.json): `python -m eyris.live paper --loop --reset`, review via `validation_review.py analyze --phase paper`
 - After a phase: `python scripts/validation_review.py all --phase validation` (report in private/review/<phase>/review.md)
 - Change settings: `python scripts/set_config.py key=value --note "why"` (validated; logged to models/config_history.json)
 - Research: `scripts/tune.py`, `scripts/report.py`, `scripts/event_experiment.py`, `scripts/agentic_research.py`
@@ -66,9 +67,8 @@ and gross 0.7 are worse; VIX overlay slightly better, entirely from Oct 2022 and
 
 ## Open items
 
-1. The user must register (by Oct 3, so the team token exists for the Oct 4–5 credit application; hard deadline
-   2026-10-08 00:00 ET for Validation) and set the secrets: CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN,
-   optionally ANTHROPIC_API_KEY and SEC_USER_AGENT.
+1. Registered (done, before Oct 3). Still to do: set the secrets CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN,
+   optionally ANTHROPIC_API_KEY, SEC_USER_AGENT, NTFY_TOPIC; rehearse with `paper --loop` on Oct 5–7 (no uploads).
 2. On Validation (Oct 8–9), check `private/<round>/decision_log.json`:
    - `holdings_source` should be `portfolio_api`. The organizer portfolio schema is undocumented; if it shows `none`/`local_state`,
      fix `live.weights_from_portfolio` using the logged `portfolio_shape`.

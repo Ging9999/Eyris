@@ -33,7 +33,23 @@ def out_dir(phase):
     return d
 
 
-def schedule():
+def paper_schedule():
+    """Paper rounds have no organizer schedule: rebuild it from the logged paper days."""
+    from eyris.config import EXEC_TIMES
+    days = sorted({d.name.split("-", 1)[1].rsplit("-r", 1)[0] for d in live.PRIVATE.glob("paper-*-r*")})
+    rounds = []
+    for day in days:
+        for n, t in enumerate(EXEC_TIMES, start=1):
+            ex = pd.Timestamp(f"{day} {t}", tz=review.ET)
+            rounds.append({"id": f"paper-{day}-r{n}", "phase": "paper", "status": "SCHEDULED",
+                           "execution_time": ex.isoformat(),
+                           "close_time": pd.Timestamp(f"{day} 16:00", tz=review.ET).isoformat()})
+    return {"rounds": rounds}
+
+
+def schedule(phase=None):
+    if phase == "paper":
+        return paper_schedule()
     try:
         return live.public_schedule()
     except Exception as e:
@@ -42,6 +58,9 @@ def schedule():
 
 
 def cmd_fetch(phase):
+    if phase == "paper":
+        print("paper phase: nothing to fetch from the organizer")
+        return
     d = out_dir(phase)
     (d / "schedule.json").write_text(json.dumps(schedule(), indent=1))
     with live._kit_session() as client:
@@ -58,7 +77,8 @@ def cmd_fetch(phase):
 def cmd_market(phase):
     import yfinance as yf
     d = out_dir(phase)
-    sched = json.loads((d / "schedule.json").read_text()) if (d / "schedule.json").exists() else schedule()
+    sched = schedule("paper") if phase == "paper" else (
+        json.loads((d / "schedule.json").read_text()) if (d / "schedule.json").exists() else schedule())
     rounds = review.phase_rounds(sched, phase, until=datetime.now(timezone.utc))
     if not rounds:
         print("no executed rounds yet")
@@ -98,7 +118,8 @@ def _receipts(decisions_payload):
 
 def cmd_analyze(phase):
     d = out_dir(phase)
-    sched = json.loads((d / "schedule.json").read_text()) if (d / "schedule.json").exists() else schedule()
+    sched = schedule("paper") if phase == "paper" else (
+        json.loads((d / "schedule.json").read_text()) if (d / "schedule.json").exists() else schedule())
     rounds = review.phase_rounds(sched, phase, until=datetime.now(timezone.utc))
     logs = review.load_round_logs(live.PRIVATE, phase)
     replay = live.replay_all([r["id"] for r in rounds])
@@ -197,7 +218,7 @@ def cmd_analyze(phase):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["fetch", "market", "analyze", "all"])
-    ap.add_argument("--phase", default="validation", choices=["validation", "official"])
+    ap.add_argument("--phase", default="validation", choices=["validation", "official", "paper"])
     a = ap.parse_args()
     if a.cmd in ("fetch", "all"):
         cmd_fetch(a.phase)

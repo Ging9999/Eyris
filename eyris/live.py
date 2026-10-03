@@ -155,9 +155,9 @@ def _num(x):
         return False
 
 
-def weights_from_state(prices):
+def weights_from_state(prices, path=None):
     """Fallback: last submitted weights drifted by price moves since then."""
-    path = PRIVATE / "state.json"
+    path = Path(path) if path else PRIVATE / "state.json"
     if not path.exists():
         return None
     st = json.loads(path.read_text())
@@ -286,10 +286,11 @@ def _shape(x, depth=0):
     return type(x).__name__
 
 
-def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_round=None):
+def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_round=None, holdings_fn=None):
     """Fetch (or load) bars, decide, write private/<round_id>/decision.json if trading.
 
-    Does not touch private/state.json: the caller saves state only after a confirmed upload."""
+    Does not touch private/state.json: the caller saves state only after a confirmed upload.
+    holdings_fn(prices) -> weights | None replaces the organizer portfolio (paper trading)."""
     as_of = as_of or min(datetime.now(ET), deadline_of(round_id))
     out_dir = PRIVATE / round_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -304,10 +305,13 @@ def prepare(phase, round_id, portfolio=None, as_of=None, snapshot=None, first_ro
     grid = resample_to_grid(df30, as_of)
     last = grid.sort_values("timestamp_et").groupby("ticker").last()
     prices = last.reindex(list(UNIVERSE))["close"].to_numpy(dtype=float)
-    cur = weights_from_portfolio(portfolio, prices) if portfolio is not None else None
-    source = "portfolio_api"
-    if cur is None:
-        cur, source = weights_from_state(prices), "local_state"
+    if holdings_fn is not None:
+        cur, source = holdings_fn(prices), "paper"
+    else:
+        cur = weights_from_portfolio(portfolio, prices) if portfolio is not None else None
+        source = "portfolio_api"
+        if cur is None:
+            cur, source = weights_from_state(prices), "local_state"
     # Only the phase's very first round may assume the USD 1M starting cash.
     if first_round is None:
         first_round = round_id in ("validation-2026-10-08-r1", "official-2026-10-12-r1")
@@ -460,9 +464,17 @@ def main(argv=None):
     run = sub.add_parser("run", help="decide and upload the currently open round via the kit")
     run.add_argument("--phase", choices=["validation", "official"], help="only act in this phase")
     run.add_argument("--dry-run", action="store_true", help="decide but never upload")
+    pp = sub.add_parser("paper", help="paper-trade a normal trading day with the real pipeline (never uploads)")
+    pp.add_argument("--loop", action="store_true", help="run every remaining round today, then the review")
+    pp.add_argument("--round", type=int, choices=range(1, 8), help="run this round of today now")
+    pp.add_argument("--day", help="YYYY-MM-DD (default: today in New York)")
+    pp.add_argument("--reset", action="store_true", help="start the paper portfolio from cash")
     rp = sub.add_parser("replay", help="re-run logged decisions from saved inputs and verify they match")
     rp.add_argument("round_ids", nargs="*", help="rounds to replay (default: all in private/)")
     a = ap.parse_args(argv)
+    if a.cmd == "paper":
+        from . import paper
+        return paper.main(a)
     if a.cmd == "replay":
         results = replay_all(a.round_ids)
         for r in results:

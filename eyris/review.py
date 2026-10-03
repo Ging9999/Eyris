@@ -197,7 +197,7 @@ def operations(logs, rounds, replay=None, receipts=None):
                        last_bar=log["last_bar"], breaker=log.get("breaker", False),
                        uploaded=log["_uploaded_file"] and not log["hold"],
                        news=(log.get("news_status") or "")[:40], replay=rep.get(r["id"]))
-            row["holdings_ok"] = log["holdings_source"] == "portfolio_api" or (
+            row["holdings_ok"] = log["holdings_source"] in ("portfolio_api", "paper") or (
                 i == 0 and log["holdings_source"] == "assumed_initial_cash")
         if receipts and r["id"] in receipts:
             row["receipt"] = receipts[r["id"]]

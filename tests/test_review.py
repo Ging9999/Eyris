@@ -90,3 +90,23 @@ def test_set_config_validates_and_records_history(tmp_path):
     with pytest.raises(ValueError):
         set_config.apply({"gross": "1.5"}, "", pf, hf)             # invalid value refused
     assert json.loads(pf.read_text())["params"]["gross"] == 0.5   # nothing written on refusal
+
+
+def test_paper_round_uses_its_own_ledger_and_never_touches_state(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from eyris import live, paper
+    monkeypatch.setattr(live, "PRIVATE", tmp_path)
+    monkeypatch.setattr(paper.alerts, "notify", lambda *a, **k: [])
+    seen = {}
+
+    def fake_prepare(phase, rid, as_of=None, holdings_fn=None, **k):
+        seen["cur"] = holdings_fn(np.full(N_ASSETS, 100.0))
+        w = {s: 0.5 / N_ASSETS for s in UNIVERSE}
+        return tmp_path / "decision.json", {"round_id": rid, "reason": "rebalance", "last_bar": "x", "breaker": False,
+                                            "weights": w, "prices": {s: 100.0 for s in UNIVERSE}}
+    monkeypatch.setattr(live, "prepare", fake_prepare)
+    assert paper.run_one("2026-10-05", 1) == "PAPER_TRADE"
+    assert not seen["cur"].any()                                  # first paper round starts from cash
+    assert paper.run_one("2026-10-05", 2) == "PAPER_TRADE"
+    assert np.isclose(seen["cur"].sum(), 0.5)                     # second round sees the paper holdings
+    assert (tmp_path / "paper_state.json").exists() and not (tmp_path / "state.json").exists()

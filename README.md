@@ -151,6 +151,17 @@ sha256, `as_of`, current weights, event and news trims, the VIX multiplier, the 
 matches the log and `decision.json` exactly. It writes `private/replay_report.json` and exits 1 on any mismatch.
 Run it before submitting the final materials, and keep `data/live/` and `private/` (including `llm_cache/`) for the review.
 
+## Rehearse on a normal trading day (paper trading)
+
+```sh
+python -m eyris.live paper --loop --reset   # start before 08:53 ET; runs all 7 rounds on time, then the review at 16:20 ET
+python -m eyris.live paper --round 1        # or a single round now
+```
+
+This is the real pipeline (download, decision, breaker, news veto, alerts, logs), but holdings come from a separate paper
+ledger and nothing is uploaded. Rounds are logged as `private/paper-<day>-r<n>/`; `replay` and
+`scripts/validation_review.py analyze --phase paper` work on them. Keep the computer awake for the whole session.
+
 ## After Validation (Oct 9 evening) and during Official
 
 ```sh
