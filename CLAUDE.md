@@ -5,10 +5,12 @@ The README covers setup and submission. The `reports/` folder covers every exper
 
 ## Commands
 
-- Tests: `python -m pytest -q` (45 tests; must stay green)
+- Tests: `python -m pytest -q` (50 tests; must stay green)
 - One live decision, no upload: `python -m eyris.live decide --phase validation --round-id validation-2026-10-08-r1`
 - Decide and upload the open round: `python -m eyris.live run` (needs CODABENCH_TOKEN, TEAM_ID, TEAM_TOKEN; alerts via NTFY_TOPIC / DISCORD_WEBHOOK_URL)
 - Verify every logged round reproduces exactly: `python -m eyris.live replay`
+- After a phase: `python scripts/validation_review.py all --phase validation` (report in private/review/<phase>/review.md)
+- Change settings: `python scripts/set_config.py key=value --note "why"` (validated; logged to models/config_history.json)
 - Research: `scripts/tune.py`, `scripts/report.py`, `scripts/event_experiment.py`, `scripts/agentic_research.py`
 - Data / kit: `python scripts/download_data.py`; earnings calendar: `python scripts/fetch_earnings.py`
 
@@ -72,6 +74,10 @@ and gross 0.7 are worse; VIX overlay slightly better, entirely from Oct 2022 and
      fix `live.weights_from_portfolio` using the logged `portfolio_shape`.
    - `last_bar` should be current.
    - receipts should be VALID/EXECUTED.
-3. After Oct 9: decide `news_veto` on/off, `gross` (evidence favours 0.5) and `vix_mode` (off vs level 25) for Official (Oct 12–30).
+3. After Oct 9: run `scripts/validation_review.py all`, then decide `news_veto`, `gross` and `vix_mode` for Official
+   (Oct 12–30) using the rules pre-registered in `eyris/review.py:DECISION_RULES` (written 2026-10-02, before Validation):
+   gross stays 0.5, vix_mode stays off, and news_veto stays on only if the API answered ≥ 90% of rounds, there were ≤ 2 trims/day and every trim
+   names a concrete event. If the simulator reconciliation fails, fix the accounting convention and re-run the backtests.
+   Don't change the strategy because of Validation P&L.
 4. Final materials are due 2026-11-03: code, run instructions, video, and LLM disclosure (prompts and settings from `llm_log.json`).
    Run `python -m eyris.live replay` first and include `private/replay_report.json`; keep `data/live/` and `private/`.

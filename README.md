@@ -151,6 +151,28 @@ sha256, `as_of`, current weights, event and news trims, the VIX multiplier, the 
 matches the log and `decision.json` exactly. It writes `private/replay_report.json` and exits 1 on any mismatch.
 Run it before submitting the final materials, and keep `data/live/` and `private/` (including `llm_cache/`) for the review.
 
+## After Validation (Oct 9 evening) and during Official
+
+```sh
+python scripts/validation_review.py all --phase validation   # fetch API (read-only) + 1-minute bars + report
+python scripts/set_config.py news_veto=false --note "why"    # apply a decision safely (validated, logged)
+```
+
+The report (`private/review/validation/review.md`) checks four things:
+1. **Plumbing:** holdings source, receipts, replay and breaker for every round.
+2. **Simulator reconciliation:** our replica of the organizer ledger, at the real 1-minute execution opens,
+   must match the organizer's period NAVs within 2 bps. It is the same accounting as the backtests, so a match
+   validates them too.
+3. **The backtest's fill proxy** vs the real 10:30 … 15:30 opens. A rehearsal on Sep 30 - Oct 1 found a
+   median gap of 14 bps per name and a signed mean of -0.2 bps, which is noise, not bias.
+4. **Evidence for the open decisions**, against rules written *before* Validation (`eyris/review.py:DECISION_RULES`).
+   Two days are far too few to tune parameters on, so the rules use Validation for plumbing and accounting,
+   not P&L.
+
+Run `market` within about 25 days of a phase, because Yahoo keeps 1-minute bars for about 30 days. During Official the
+organizer hides metrics until trading ends. `python scripts/validation_review.py all --phase official` then reports
+our own metrics from the replica.
+
 ## Test
 
 ```sh
